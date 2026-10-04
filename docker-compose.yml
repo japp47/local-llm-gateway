@@ -1,0 +1,25 @@
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    ports: ["127.0.0.1:6379:6379"]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["127.0.0.1:9090:9090"]
+    restart: unless-stopped
+
+  # Optional: run the gateway itself in Docker (Ollama stays on the host)
+  gateway:
+    profiles: ["app"]
+    build: .
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      OLLAMA_URL: http://host.docker.internal:11434
+      REDIS_URL: redis://redis:6379
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [redis]

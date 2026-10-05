@@ -1,7 +1,8 @@
 import { buildApp } from './app.js';
-import { config } from './config.js';
+import { createConfig } from './config.js';
 
-const app = await buildApp();
+const config = createConfig();
+const { app } = await buildApp({ config });
 await app.listen({ host: config.HOST, port: config.PORT });
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {

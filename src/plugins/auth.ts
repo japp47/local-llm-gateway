@@ -1,12 +1,22 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { apiKeys } from '../config.js';
+import type { AuthContext, AuthService } from '../services/auth.service.js';
 
-export async function requireApiKey(req: FastifyRequest, reply: FastifyReply) {
-  const h = req.headers.authorization;
-  const key = h?.startsWith('Bearer ') ? h.slice(7) : undefined;
-  if (!key || !apiKeys.has(key)) {
-    return reply
-      .code(401)
-      .send({ error: { message: 'invalid api key', type: 'auth_error' } });
+declare module 'fastify' {
+  interface FastifyRequest {
+    auth: AuthContext | null;
   }
+}
+
+export function makeAuthHook(auth: AuthService) {
+  return async function requireApiKey(req: FastifyRequest, reply: FastifyReply) {
+    const header = req.headers.authorization;
+    const key = header?.startsWith('Bearer ') ? header.slice(7).trim() : undefined;
+    const ctx = key ? await auth.authenticate(key) : null;
+    if (!ctx) {
+      return reply.code(401).send({
+        error: { code: 'invalid_api_key', message: 'invalid api key', request_id: req.id },
+      });
+    }
+    req.auth = ctx;
+  };
 }

@@ -1,6 +1,6 @@
-import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from '../db/client.js';
-import { conversations } from '../db/schema.js';
+import { conversations, messages } from '../db/schema.js';
 
 export type Conversation = typeof conversations.$inferSelect;
 
@@ -10,6 +10,76 @@ export class ConversationsRepo {
   async create(v: { userId: string; defaultModel: string; title?: string; systemPrompt?: string }) {
     const [row] = await this.db.insert(conversations).values(v).returning();
     return row!;
+  }
+
+  async fork(v: {
+    userId: string;
+    sourceConversationId: string;
+    fromMessageId: string;
+    title?: string;
+    defaultModel?: string;
+  }) {
+    return this.db.transaction(async (tx) => {
+      const [source] = await tx
+        .select()
+        .from(conversations)
+        .where(
+          and(
+            eq(conversations.id, v.sourceConversationId),
+            eq(conversations.userId, v.userId),
+          ),
+        )
+        .for('share');
+      if (!source) return { kind: 'conversation_not_found' as const };
+
+      const [anchor] = await tx
+        .select({ id: messages.id, seq: messages.seq, role: messages.role })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.id, v.fromMessageId),
+            eq(messages.conversationId, source.id),
+            inArray(messages.role, ['user', 'assistant']),
+          ),
+        )
+        .for('share');
+      if (!anchor) return { kind: 'message_not_found' as const };
+
+      const [fork] = await tx
+        .insert(conversations)
+        .values({
+          userId: v.userId,
+          title: v.title ?? `${source.title ?? 'Conversation'} (branch)`.slice(0, 200),
+          defaultModel: v.defaultModel ?? source.defaultModel,
+          systemPrompt: source.systemPrompt,
+          parentConversationId: source.id,
+          forkedFromMessageId: anchor.id,
+        })
+        .returning();
+
+      const history = await tx
+        .select({
+          role: messages.role,
+          content: messages.content,
+          status: messages.status,
+          model: messages.model,
+          createdAt: messages.createdAt,
+        })
+        .from(messages)
+        .where(and(eq(messages.conversationId, source.id), lte(messages.seq, anchor.seq)))
+        .orderBy(asc(messages.seq));
+
+      if (history.length > 0) {
+        await tx.insert(messages).values(
+          history.map((message) => ({
+            conversationId: fork!.id,
+            ...message,
+          })),
+        );
+      }
+
+      return { kind: 'forked' as const, conversation: fork!, messageCount: history.length };
+    });
   }
 
   /** Always scoped by user: a conversation id alone never grants access. */

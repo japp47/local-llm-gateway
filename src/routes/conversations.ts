@@ -13,6 +13,11 @@ const CreateBody = z.object({
   systemPrompt: z.string().max(8_000).optional(),
 });
 const RenameBody = z.object({ title: z.string().min(1).max(200) });
+const ForkBody = z.object({
+  fromMessageId: z.uuid(),
+  title: z.string().min(1).max(200).optional(),
+  defaultModel: z.string().optional(),
+});
 const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   before: z.coerce.date().optional(),
@@ -28,6 +33,8 @@ const toConversation = (c: Conversation) => ({
   title: c.title,
   defaultModel: c.defaultModel,
   systemPrompt: c.systemPrompt,
+  parentConversationId: c.parentConversationId,
+  forkedFromMessageId: c.forkedFromMessageId,
   createdAt: c.createdAt,
   updatedAt: c.updatedAt,
 });
@@ -58,6 +65,37 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
       systemPrompt: body.systemPrompt,
     });
     return reply.code(201).send(toConversation(conv));
+  });
+
+  app.post('/conversations/:id/forks', async (req, reply) => {
+    const { id } = Params.parse(req.params);
+    const body = ForkBody.parse(req.body);
+    if (body.defaultModel !== undefined && !config.allowedModels.has(body.defaultModel)) {
+      throw new AppError(
+        400,
+        'model_not_allowed',
+        `model not allowed: ${body.defaultModel}`,
+      );
+    }
+
+    const result = await repos.conversations.fork({
+      userId: userId(req),
+      sourceConversationId: id,
+      fromMessageId: body.fromMessageId,
+      title: body.title,
+      defaultModel: body.defaultModel,
+    });
+    if (result.kind === 'conversation_not_found') {
+      throw new AppError(404, 'conversation_not_found', 'conversation not found');
+    }
+    if (result.kind === 'message_not_found') {
+      throw new AppError(404, 'message_not_found', 'fork message not found in conversation');
+    }
+
+    return reply.code(201).send({
+      ...toConversation(result.conversation),
+      messageCount: result.messageCount,
+    });
   });
 
   app.get('/conversations', async (req) => {

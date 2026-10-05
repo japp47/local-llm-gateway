@@ -1,4 +1,13 @@
-import { bigserial, index, integer, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
+import {
+  bigserial,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+  type AnyPgColumn,
+} from 'drizzle-orm/pg-core';
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 
@@ -25,11 +34,22 @@ export const conversations = pgTable(
     title: text('title'),
     defaultModel: text('default_model').notNull(),
     systemPrompt: text('system_prompt'),
+    parentConversationId: uuid('parent_conversation_id').references(
+      (): AnyPgColumn => conversations.id,
+      { onDelete: 'set null' },
+    ),
+    forkedFromMessageId: uuid('forked_from_message_id').references(
+      (): AnyPgColumn => messages.id,
+      { onDelete: 'set null' },
+    ),
     leaseUntil: ts('lease_until'), // one in-flight generation per conversation
     createdAt: ts('created_at').notNull().defaultNow(),
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
-  (t) => [index('conversations_user_updated_idx').on(t.userId, t.updatedAt)],
+  (t) => [
+    index('conversations_user_updated_idx').on(t.userId, t.updatedAt),
+    index('conversations_parent_idx').on(t.parentConversationId),
+  ],
 );
 
 export const messages = pgTable(

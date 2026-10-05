@@ -1433,6 +1433,36 @@ The important architectural idea is that your application talks to **your contra
 
 That makes the model a swappable dependency.
 
+## Stateful conversation API
+
+Authenticated conversations are stored in PostgreSQL:
+
+```text
+POST   /v1/conversations
+GET    /v1/conversations
+GET    /v1/conversations/:id
+PATCH  /v1/conversations/:id
+DELETE /v1/conversations/:id
+POST   /v1/conversations/:id/messages
+POST   /v1/conversations/:id/forks
+```
+
+Fork at a message to create a new conversation with a snapshot of history through that message. The source is unchanged; the fork gets new message IDs and can use a different title or default model.
+
+```http
+POST /v1/conversations/{id}/forks
+Authorization: Bearer <API_KEY>
+Content-Type: application/json
+
+{
+  "fromMessageId": "<message-id>",
+  "title": "Try another approach",
+  "defaultModel": "optional-allowed-model"
+}
+```
+
+Only user and assistant messages in the source conversation can be fork points. Omit `title` and `defaultModel` to derive the title and inherit the source model. The response is `201 Created`; it includes the new conversation's `parentConversationId` and `forkedFromMessageId`.
+
 ---
 
 # 39. Current limitations
@@ -1441,8 +1471,6 @@ This repository is intentionally the first stage of the project.
 
 Current implementation does **not** yet include:
 
-- persistent conversation history
-- PostgreSQL users/conversations/messages
 - hashed production API keys
 - multiple LLM providers
 - automatic model routing

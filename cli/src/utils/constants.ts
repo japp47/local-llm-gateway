@@ -2,6 +2,7 @@ export const CONFIG_KEYS = ['baseUrl', 'apiKey', 'model'] as const
 export const DEFAULT_BASE_URL = 'http://localhost:3000';
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const PREFIX_RE = /^[0-9a-f-]{4,}$/i;
+export const PROFILE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,31}$/;
 
 export const HELP = `Commands:
   /help              show this help

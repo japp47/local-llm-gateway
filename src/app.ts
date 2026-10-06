@@ -24,6 +24,7 @@ import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
 import { ModelsService } from './services/models.service.js';
 import { ModelsRepo } from './repositories/models.js';
+import { meRoutes } from './routes/me.js';
 
 export interface Deps {
   config: config;
@@ -152,6 +153,7 @@ export async function buildApp(opts: BuildOptions = {}) {
       await v1.register(modelRoutes, { deps });
       await v1.register(chatRoutes, { deps });
       await v1.register(conversationRoutes, { deps });
+      await v1.register(meRoutes, { deps });
     },
     { prefix: '/v1' },
   );

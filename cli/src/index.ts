@@ -5,6 +5,14 @@ import { forkCommand, lsCommand, renameCommand, rmCommand, showCommand } from '.
 import { configPathCommand, configSetCommand, configShowCommand, modelsCommand, statsCommand } from './commands/info.js';
 import { CliError, describeError } from './errors.js';
 import { errc } from './format.js';
+import {
+  profileAddCommand,
+  profileCurrentCommand,
+  profileListCommand,
+  profileRemoveCommand,
+  profileUseCommand,
+  whoAmICommand,
+} from './commands/profile.js';
 
 // Wraps an action so any failure prints one friendly line and sets the exit code.
 const wrap =
@@ -85,6 +93,41 @@ program
   .option('--recent <n>', 'recent generations to list', '5')
   .option('--json', 'machine-readable output')
   .action(wrap(statsCommand));
+
+const profile = program
+  .command('profile')
+  .description('manage gateway profiles');
+
+profile
+  .command('add')
+  .argument('<name>')
+  .option('--api-key <key>', 'API key')
+  .option('--base-url <url>', 'gateway base URL')
+  .option('--model <name>', 'default CLI model')
+  .action(wrap(profileAddCommand));
+
+profile
+  .command('use')
+  .argument('<name>')
+  .action(wrap(profileUseCommand));
+
+profile
+  .command('list')
+  .action(wrap(profileListCommand));
+
+profile
+  .command('current')
+  .action(wrap(profileCurrentCommand));
+
+profile
+  .command('remove')
+  .argument('<name>')
+  .action(wrap(profileRemoveCommand));
+
+program
+  .command('whoami')
+  .description('show the authenticated gateway user')
+  .action(wrap(whoAmICommand));
 
 const config = program.command('config').description('manage CLI settings');
 config.command('set').argument('<key>', 'baseUrl | apiKey | model').argument('<value>').action(wrap(configSetCommand));

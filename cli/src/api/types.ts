@@ -143,3 +143,8 @@ export interface ApiClientConfig {
   baseUrl: string;
   apiKey: string;
 }
+
+export interface CurrentUser {
+  id: string;
+  email: string;
+}

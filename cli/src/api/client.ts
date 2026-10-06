@@ -14,6 +14,7 @@ import type {
   StreamHandlers,
   StreamResult,
   Transcript,
+  CurrentUser,
 } from './types.js';
 
 interface RequestOptions {
@@ -98,6 +99,10 @@ export class ApiClient {
     );
   }
 
+  me() {
+    return this.json<CurrentUser>('GET', '/v1/me');
+  }
+  
   models() {
     return this.json<ModelList>('GET', '/v1/models');
   }

@@ -1409,7 +1409,28 @@ These settings are important because they control how aggressively the local run
 The gateway exposes:
 
 ```text
+GET  /v1/model
+GET  /v1/models
 POST /v1/chat/completions
+```
+
+`GET /v1/model` requires a bearer API key and returns only the configured
+`DEFAULT_MODEL`:
+
+```json
+{ "id": "llama3.2:3b", "default": true }
+```
+
+`GET /v1/models` requires a bearer API key and returns the models configured in
+`ALLOWED_MODELS`, marking `DEFAULT_MODEL`:
+
+```json
+{
+  "data": [
+    { "id": "llama3.2:3b", "default": true },
+    { "id": "backend-mentor", "default": false }
+  ]
+}
 ```
 
 This means an OpenAI-shaped client can be pointed at your local gateway by changing the base URL.

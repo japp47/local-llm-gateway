@@ -19,8 +19,11 @@ import { MessagesRepo } from './repositories/messages.js';
 import { chatRoutes } from './routes/chat.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { healthRoutes } from './routes/health.js';
+import { modelRoutes } from './routes/models.js';
 import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
+import { ModelsService } from './services/models.service.js';
+import { ModelsRepo } from './repositories/models.js';
 
 export interface Deps {
   config: config;
@@ -30,12 +33,14 @@ export interface Deps {
   provider: LLMProvider;
   auth: AuthService;
   conversations: ConversationService;
+  models: ModelsService;
   repos: {
     users: UsersRepo;
     apiKeys: ApiKeysRepo;
     conversations: ConversationsRepo;
     messages: MessagesRepo;
     generations: GenerationsRepo;
+    models: ModelsRepo;
   };
 }
 
@@ -96,11 +101,13 @@ export async function buildApp(opts: BuildOptions = {}) {
     conversations: new ConversationsRepo(db),
     messages: new MessagesRepo(db),
     generations: new GenerationsRepo(db),
+    models: new ModelsRepo(config.allowedModels),
   };
   const limiter = new Semaphore(config.MAX_CONCURRENCY, config.MAX_QUEUE);
   const metrics = createMetrics(limiter);
   const provider = opts.provider ?? new OllamaProvider(config.OLLAMA_URL);
   const auth = new AuthService(repos.apiKeys);
+  const models = new ModelsService(repos.models, config.DEFAULT_MODEL);
   const conversations = new ConversationService({
     config,
     provider,
@@ -111,7 +118,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     messages: repos.messages,
     generations: repos.generations,
   });
-  const deps: Deps = { config, db, limiter, metrics, provider, auth, conversations, repos };
+  const deps: Deps = { config, db, limiter, metrics, provider, auth, conversations, models, repos };
 
   let redis: Redis | null = null;
   if (config.REDIS_URL) {
@@ -142,6 +149,7 @@ export async function buildApp(opts: BuildOptions = {}) {
         skipOnError: true, // if Redis dies, serve traffic instead of failing
         keyGenerator: (req) => req.auth?.keyId ?? req.ip, // never the raw key
       });
+      await v1.register(modelRoutes, { deps });
       await v1.register(chatRoutes, { deps });
       await v1.register(conversationRoutes, { deps });
     },

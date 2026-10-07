@@ -101,8 +101,9 @@ const profile = program
 profile
   .command('add')
   .argument('<name>')
-  .option('--api-key <key>', 'API key')
-  .option('--base-url <url>', 'gateway base URL')
+  .option('--api-key <key>', 'API key (visible in shell history; prefer the prompt or --api-key-stdin)')
+  .option('--api-key-stdin', 'read the API key from stdin')
+  .option('--base-url <url>', 'gateway base URL (default: http://localhost:3000)')
   .option('--model <name>', 'default CLI model')
   .action(wrap(profileAddCommand));
 
@@ -122,6 +123,7 @@ profile
 profile
   .command('remove')
   .argument('<name>')
+  .option('--force', 'remove the active profile even if others exist (none will be active afterwards)')
   .action(wrap(profileRemoveCommand));
 
 program
@@ -130,7 +132,12 @@ program
   .action(wrap(whoAmICommand));
 
 const config = program.command('config').description('manage CLI settings');
-config.command('set').argument('<key>', 'baseUrl | apiKey | model').argument('<value>').action(wrap(configSetCommand));
+config
+  .command('set')
+  .argument('<key>', 'baseUrl | apiKey | model')
+  .argument('[value]', 'new value (for apiKey, leave it off to be prompted)')
+  .option('--api-key-stdin', 'read the API key from stdin')
+  .action(wrap(configSetCommand));
 config.command('show').action(wrap(configShowCommand));
 config.command('path').action(wrap(configPathCommand));
 

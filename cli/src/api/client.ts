@@ -14,6 +14,7 @@ import type {
   StreamHandlers,
   StreamResult,
   Transcript,
+  TranscriptPage,
   CurrentUser,
 } from './types.js';
 
@@ -75,8 +76,29 @@ export class ApiClient {
     return this.json<ConversationPage>('GET', `/v1/conversations?${query}`);
   }
 
-  getConversation(id: string) {
-    return this.json<Transcript>('GET', `/v1/conversations/${encodeURIComponent(id)}`);
+  /**
+   * Loads the whole transcript. The gateway sends long conversations in pages;
+   * this follows them so callers (show, resume, fork numbering) always see every message.
+   */
+  async getConversation(id: string): Promise<Transcript> {
+    const messages: Transcript['messages'] = [];
+    let first: TranscriptPage | undefined;
+    let after = 0;
+
+    for (let page = 0; page < 1000; page++) {
+      const query = new URLSearchParams({ after: String(after), limit: '500' });
+      const t = await this.json<TranscriptPage>(
+        'GET',
+        `/v1/conversations/${encodeURIComponent(id)}?${query}`,
+      );
+      first ??= t;
+      messages.push(...t.messages);
+      if (t.nextAfter === null || t.nextAfter === undefined) break;
+      after = t.nextAfter;
+    }
+
+    const { nextAfter: _next, ...transcript } = first!;
+    return { ...transcript, messages };
   }
 
   createConversation(body: CreateConversationInput) {

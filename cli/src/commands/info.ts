@@ -2,6 +2,7 @@ import { type ConfigKey, configPath, loadConfig, maskKey, saveConfigValue } from
 import { CliError } from '../errors.js';
 import { out, relativeTime, renderTable, shortId } from '../format.js';
 import { CONFIG_KEYS } from '../utils/constants.js';
+import { resolveApiKeyInput } from './profile.js';
 import { getClient } from './shared.js';
 
 export async function modelsCommand(opts: { json?: boolean }): Promise<void> {
@@ -56,20 +57,37 @@ export async function statsCommand(opts: { hours: string; recent: string; json?:
   }
 }
 
-export function configSetCommand(key: string, value: string): void {
+export async function configSetCommand(
+  key: string,
+  value: string | undefined,
+  opts: { apiKeyStdin?: boolean } = {},
+): Promise<void> {
   if (!(CONFIG_KEYS as readonly string[]).includes(key)) {
     throw new CliError(`Unknown key "${key}". Valid keys: ${CONFIG_KEYS.join(', ')}`);
   }
-  saveConfigValue(key as ConfigKey, value);
+
+  let finalValue = value;
+  if (key === 'apiKey') {
+    // Leave the value off to be prompted (or use --api-key-stdin) so the key stays out of shell history.
+    finalValue = await resolveApiKeyInput({ apiKey: value, apiKeyStdin: opts.apiKeyStdin });
+  } else if (finalValue === undefined) {
+    throw new CliError(`Usage: llm config set ${key} <value>`);
+  }
+
+  saveConfigValue(key as ConfigKey, finalValue);
   console.log(`${key} saved to ${configPath()}`);
 }
 
 export function configShowCommand(): void {
   const c = loadConfig();
-  console.log(`baseUrl  ${c.baseUrl}`);
-  console.log(`apiKey   ${maskKey(c.apiKey)}`);
-  console.log(`model    ${c.model ?? '(server default)'}`);
+  const from = (k: ConfigKey, name: string) => (c.overrides?.includes(k) ? out.dim(`  (from ${name})`) : '');
+  console.log(`profile  ${c.currentProfile ?? '(none)'}`);
+  console.log(`baseUrl  ${c.baseUrl}${from('baseUrl', 'LLM_BASE_URL')}`);
+  console.log(`apiKey   ${maskKey(c.apiKey)}${from('apiKey', 'LLM_API_KEY')}`);
+  console.log(`model    ${c.model ?? '(server default)'}${from('model', 'LLM_MODEL')}`);
   console.log(out.dim(`file     ${configPath()}  (env LLM_BASE_URL / LLM_API_KEY / LLM_MODEL override it)`));
+  if (c.keyWithheldFor) console.log(out.dim('note     the saved key is not used because LLM_BASE_URL points to a different gateway'));
+  if (c.profileProblem) console.log(out.dim(`note     ${c.profileProblem}`));
 }
 
 export function configPathCommand(): void {

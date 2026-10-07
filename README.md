@@ -1270,10 +1270,31 @@ request concurrency
 
 # 34. Tests and build
 
-Run tests:
+Unit tests (no database needed):
 
 ```bash
 npm test
+```
+
+Integration tests run the real Fastify app against PostgreSQL with a scripted fake model. They need a throwaway database; CI uses `llmgw_test`:
+
+```bash
+createdb llmgw_test   # or use the postgres service from docker-compose.yml
+TEST_DATABASE_URL=postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test npm run test:int
+```
+
+The integration suites cover conversations and streaming, forks, `/v1/me` and models, paged transcripts, `/v1/stats`, and the Ollama adapter against a fake upstream. The integration tests **truncate every table** in the database they point at, so never aim `TEST_DATABASE_URL` at data you want to keep.
+
+The CLI has its own unit tests:
+
+```bash
+cd cli && npm test
+```
+
+Typecheck everything CI checks:
+
+```bash
+npm run typecheck && (cd cli && npm run typecheck)
 ```
 
 Build TypeScript:
@@ -1466,7 +1487,15 @@ PATCH  /v1/conversations/:id
 DELETE /v1/conversations/:id
 POST   /v1/conversations/:id/messages
 POST   /v1/conversations/:id/forks
+GET    /v1/me
+GET    /v1/models
+GET    /v1/model
+GET    /v1/stats
 ```
+
+`GET /v1/conversations/:id` returns the transcript in pages so long conversations are never silently cut off. Query: `limit` (1 to 500, default 500) and `after` (a message `seq`, default 0). The response includes `messageCount` (the total) and `nextAfter`: the `seq` to pass as `after` for the next page, or `null` on the last page. Every message carries its `seq`.
+
+`GET /v1/stats?hours=24&recent=5` summarizes the calling user's generations over the last `hours` (1 to 720): per model and provider it returns request counts (complete, partial, error), token totals, TTFT average, p50 and p95, average queue wait, and average tokens per second, plus the `recent` (0 to 50) latest generations. It never includes other users' data. `llm stats` prints it.
 
 Fork at a message to create a new conversation with a snapshot of history through that message. The source is unchanged; the fork gets new message IDs and can use a different title or default model.
 
@@ -1488,20 +1517,28 @@ Only user and assistant messages in the source conversation can be fork points. 
 
 # 39. Current limitations
 
-This repository is intentionally the first stage of the project.
+The gateway, CLI, forks and tests are in place. Known gaps:
 
-Current implementation does **not** yet include:
+**Setup and distribution**
 
-- hashed production API keys
-- multiple LLM providers
-- automatic model routing
+- Running it means starting PostgreSQL, Ollama and (optionally) Redis yourself and following a terminal procedure. There is no installer and no single-user mode without Postgres.
+- Models are an allowlist in the environment (`ALLOWED_MODELS`), not a registry with context windows or capabilities.
+
+**Security and keys**
+
+- API keys are SHA-256 hashed on the server, but the CLI stores the raw key in a `0600` config file. An OS keychain option does not exist yet.
+- Keys are created with `npm run key:create` only. There are no endpoints or commands to list, name, expire or revoke keys, and `api_keys` has no `last_used_at`.
+
+**Product features not built yet**
+
+- web UI
+- conversation search, export and import
+- recovery of an interrupted reply from the CLI
+- multiple LLM providers and automatic model routing
 - RAG / vector search
 - MCP tools / agents
-- web UI
-- dedicated CLI client
 - Grafana dashboards
 - response caching
-- advanced token/context management
 
 These are future phases rather than missing pieces of the current core gateway.
 

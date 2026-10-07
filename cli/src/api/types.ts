@@ -11,6 +11,7 @@ export interface Conversation {
 
 export interface Message {
   id: string;
+  seq?: number;
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string;
   status: 'complete' | 'partial' | 'error';
@@ -20,6 +21,14 @@ export interface Message {
 
 export interface Transcript extends Conversation {
   messages: Message[];
+  /** Total messages in the conversation (older gateways omit it). */
+  messageCount?: number;
+}
+
+/** One page of a transcript, as the gateway sends it. */
+export interface TranscriptPage extends Transcript {
+  /** Pass as `after` to fetch the next page; null/absent on the last page. */
+  nextAfter?: number | null;
 }
 
 export interface ConversationPage {

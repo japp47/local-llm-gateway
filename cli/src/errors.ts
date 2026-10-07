@@ -13,7 +13,7 @@ export function describeError(e: unknown): string {
   if (e instanceof ApiError) {
     switch (e.code) {
       case 'invalid_api_key':
-        return 'The gateway rejected your API key. Set a valid one with: llm config set apiKey <key>';
+        return 'The gateway rejected your API key. Update the saved key with: llm config set apiKey  (you will be prompted)';
       case 'conversation_busy':
         return 'That conversation is still generating a reply. Wait for it to finish, then retry.';
       case 'server_busy':

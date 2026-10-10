@@ -26,6 +26,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - name: CLI install, typecheck and tests
+        working-directory: cli
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
       - run: npm test
       - run: npm run test:int
         env:

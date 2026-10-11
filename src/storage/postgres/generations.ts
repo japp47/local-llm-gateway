@@ -1,36 +1,19 @@
-import { and, desc, eq, gte, sql } from 'drizzle-orm';
-import type { Db } from '../db/client.js';
-import { generations } from '../db/schema.js';
-
-export type NewGeneration = typeof generations.$inferInsert;
-
-export interface ModelStatsRow {
-  model: string;
-  provider: string;
-  requests: number;
-  complete: number;
-  partial: number;
-  errors: number;
-  promptTokens: number;
-  completionTokens: number;
-  avgTtftMs: number | null;
-  p50TtftMs: number | null;
-  p95TtftMs: number | null;
-  avgQueueMs: number | null;
-  avgTokPerSec: number | null;
-}
+import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
+import type { Db } from './client.js';
+import type { GenerationsStore } from '../ports.js';
+import type { Generation, ModelStatsRow, NewGeneration, RecentGeneration } from '../types.js';
+import { generations } from './schema.js';
 
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
 
-export class GenerationsRepo {
+export class PgGenerationsStore implements GenerationsStore {
   constructor(private readonly db: Db) {}
 
-  async add(v: NewGeneration) {
+  async add(v: NewGeneration): Promise<Generation> {
     const [row] = await this.db.insert(generations).values(v).returning();
     return row!;
   }
 
-  /** Per-model latency, throughput and token totals for one user since `since`. */
   async statsByModel(userId: string, since: Date): Promise<ModelStatsRow[]> {
     const rows = await this.db.execute(sql`
       select
@@ -71,7 +54,7 @@ export class GenerationsRepo {
     }));
   }
 
-  async recent(userId: string, limit: number, since?: Date) {
+  async recent(userId: string, limit: number, since?: Date): Promise<RecentGeneration[]> {
     if (limit === 0) return [];
     return this.db
       .select({
@@ -96,5 +79,13 @@ export class GenerationsRepo {
       )
       .orderBy(desc(generations.createdAt))
       .limit(limit);
+  }
+
+  async listByUser(userId: string): Promise<Generation[]> {
+    return this.db
+      .select()
+      .from(generations)
+      .where(eq(generations.userId, userId))
+      .orderBy(asc(generations.createdAt));
   }
 }

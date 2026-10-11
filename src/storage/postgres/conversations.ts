@@ -1,24 +1,24 @@
 import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
-import type { Db } from '../db/client.js';
-import { conversations, messages } from '../db/schema.js';
+import type { Db } from './client.js';
+import type { ConversationsStore } from '../ports.js';
+import type {
+  Conversation,
+  ConversationListKey,
+  ForkInput,
+  ForkResult,
+  NewConversation,
+} from '../types.js';
+import { conversations, messages } from './schema.js';
 
-export type Conversation = typeof conversations.$inferSelect;
-
-export class ConversationsRepo {
+export class PgConversationsStore implements ConversationsStore {
   constructor(private readonly db: Db) {}
 
-  async create(v: { userId: string; defaultModel: string; title?: string; systemPrompt?: string }) {
+  async create(v: NewConversation): Promise<Conversation> {
     const [row] = await this.db.insert(conversations).values(v).returning();
     return row!;
   }
 
-  async fork(v: {
-    userId: string;
-    sourceConversationId: string;
-    fromMessageId: string;
-    title?: string;
-    defaultModel?: string;
-  }) {
+  async fork(v: ForkInput): Promise<ForkResult> {
     return this.db.transaction(async (tx) => {
       const [source] = await tx
         .select()
@@ -82,8 +82,7 @@ export class ConversationsRepo {
     });
   }
 
-  /** Always scoped by user: a conversation id alone never grants access. */
-  async get(userId: string, id: string) {
+  async get(userId: string, id: string): Promise<Conversation | null> {
     const [row] = await this.db
       .select()
       .from(conversations)
@@ -92,20 +91,23 @@ export class ConversationsRepo {
     return row ?? null;
   }
 
-  async list(userId: string, limit: number, before?: Date) {
+  async list(userId: string, limit: number, after?: ConversationListKey): Promise<Conversation[]> {
+    // Keyset paging on (updated_at, id): the id breaks ties so equal timestamps are never skipped.
+    const older = after
+      ? or(
+          lt(conversations.updatedAt, after.updatedAt),
+          and(eq(conversations.updatedAt, after.updatedAt), lt(conversations.id, after.id)),
+        )
+      : undefined;
     return this.db
       .select()
       .from(conversations)
-      .where(
-        before
-          ? and(eq(conversations.userId, userId), lt(conversations.updatedAt, before))
-          : eq(conversations.userId, userId),
-      )
-      .orderBy(desc(conversations.updatedAt))
+      .where(and(eq(conversations.userId, userId), older))
+      .orderBy(desc(conversations.updatedAt), desc(conversations.id))
       .limit(limit);
   }
 
-  async rename(userId: string, id: string, title: string) {
+  async rename(userId: string, id: string, title: string): Promise<Conversation | null> {
     const [row] = await this.db
       .update(conversations)
       .set({ title, updatedAt: sql`now()` })
@@ -122,7 +124,6 @@ export class ConversationsRepo {
     return rows.length > 0;
   }
 
-  /** Atomic compare-and-set lease: succeeds only if nobody holds an unexpired lease. */
   async acquireLease(id: string, seconds: number): Promise<boolean> {
     const rows = await this.db
       .update(conversations)
@@ -137,12 +138,11 @@ export class ConversationsRepo {
     return rows.length > 0;
   }
 
-  async releaseLease(id: string) {
+  async releaseLease(id: string): Promise<void> {
     await this.db.update(conversations).set({ leaseUntil: null }).where(eq(conversations.id, id));
   }
 
-  /** Bump updated_at; set the title only if it is still empty. */
-  async touch(id: string, titleCandidate: string) {
+  async touch(id: string, titleCandidate: string): Promise<void> {
     await this.db
       .update(conversations)
       .set({

@@ -1,7 +1,6 @@
 import { createConfig } from '../src/config.js';
-import { createDb } from '../src/db/client.js';
 import { generateApiKey, sha256 } from '../src/lib/hash.js';
-import { ApiKeysRepo, UsersRepo } from '../src/repositories/identity.js';
+import { createStorage } from '../src/storage/index.js';
 
 const email = process.argv[2];
 if (!email) {
@@ -9,14 +8,13 @@ if (!email) {
   process.exit(1);
 }
 
-const { db, close } = createDb(createConfig().DATABASE_URL);
-const users = new UsersRepo(db);
-const keys = new ApiKeysRepo(db);
+const storage = createStorage(createConfig());
+const { users, apiKeys: keys } = storage;
 
 const user = (await users.findByEmail(email)) ?? (await users.create(email));
 const raw = generateApiKey();
 await keys.create(user.id, sha256(raw), process.argv[3]);
-await close();
+await storage.close();
 
 console.log(`user:    ${user.email} (${user.id})`);
 console.log(`api key: ${raw}`);

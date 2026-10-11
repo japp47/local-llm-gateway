@@ -1,6 +1,4 @@
-import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { apiKeys } from '../src/db/schema.js';
 import { sha256 } from '../src/lib/hash.js';
 import { FakeProvider, makeTestApp } from './helpers.js';
 
@@ -29,7 +27,8 @@ describe('identity and models endpoints', () => {
     expect(none.statusCode).toBe(401);
 
     const a = await t.addUser('a@example.com');
-    await t.deps.db.update(apiKeys).set({ revokedAt: new Date() }).where(eq(apiKeys.keyHash, sha256(a.key)));
+    expect(await t.deps.repos.apiKeys.revoke(a.keyId)).toBe(true);
+    expect(await t.deps.repos.apiKeys.revoke(a.keyId)).toBe(false); // already revoked
     const revoked = await t.app.inject({ method: 'GET', url: '/v1/me', headers: a.headers });
     expect(revoked.statusCode).toBe(401);
     expect(revoked.json().error.code).toBe('invalid_api_key');

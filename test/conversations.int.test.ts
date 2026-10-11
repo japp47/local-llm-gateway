@@ -1,6 +1,4 @@
-import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { generations } from '../src/db/schema.js';
 import { FakeProvider, makeTestApp, parseSse } from './helpers.js';
 
 type T = Awaited<ReturnType<typeof makeTestApp>>;
@@ -127,7 +125,7 @@ describe('conversations API', () => {
         ['assistant', 'Hello world', 'complete'],
       ]);
 
-      const rows = await t.deps.db.select().from(generations).where(eq(generations.requestId, requestId));
+      const rows = (await t.deps.repos.generations.listByUser(a.userId)).filter((g) => g.requestId === requestId);
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({ provider: 'fake', model: 'fake-model', status: 'complete', promptTokens: 9 });
       expect(rows[0]!.messageId).toBe(body.messages[1].id);
@@ -191,7 +189,7 @@ describe('conversations API', () => {
 
       const full = await t.app.inject({ method: 'GET', url: `/v1/conversations/${conv.id}`, headers: a.headers });
       expect(full.json().messages[1]).toMatchObject({ content: 'Hello', status: 'partial' });
-      const rows = await t.deps.db.select().from(generations);
+      const rows = await t.deps.repos.generations.listByUser(a.userId);
       expect(rows[0]).toMatchObject({ status: 'partial', errorCode: 'internal_error' });
     });
   });

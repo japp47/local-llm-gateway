@@ -44,7 +44,8 @@ export const conversations = pgTable(
     ),
     leaseUntil: ts('lease_until'), // one in-flight generation per conversation
     createdAt: ts('created_at').notNull().defaultNow(),
-    updatedAt: ts('updated_at').notNull().defaultNow(),
+    // Millisecond precision: it is the list cursor, and a JS Date (and JSON) only keeps ms.
+    updatedAt: timestamp('updated_at', { withTimezone: true, precision: 3 }).notNull().defaultNow(),
   },
   (t) => [
     index('conversations_user_updated_idx').on(t.userId, t.updatedAt),

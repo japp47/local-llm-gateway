@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import type { FastifyPluginAsync } from 'fastify';
 import { ollamaReady } from '../lib/ollama.js';
 import type { Deps } from '../app.js';
@@ -9,7 +8,7 @@ export const healthRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { de
   app.get('/readyz', async (_req, reply) => {
     const [ollama, db] = await Promise.all([
       ollamaReady(deps.config.OLLAMA_URL),
-      deps.db.execute(sql`select 1`).then(() => true, () => false),
+      deps.storage.ping(),
     ]);
     const ok = ollama && db;
     return reply.code(ok ? 200 : 503).send({ ok, ollama, db });

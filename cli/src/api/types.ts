@@ -33,7 +33,8 @@ export interface TranscriptPage extends Transcript {
 
 export interface ConversationPage {
   data: Conversation[];
-  nextBefore: string | null;
+  /** Opaque; pass back as `cursor` for the next page. Null on the last page. */
+  nextCursor: string | null;
 }
 
 export interface CreateConversationInput {

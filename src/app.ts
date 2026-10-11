@@ -4,7 +4,6 @@ import Fastify from 'fastify';
 import { Redis } from 'ioredis';
 import { ZodError } from 'zod';
 import { createConfig, type config } from './config.js';
-import { createDb, type Database, type Db } from './db/client.js';
 import { AppError } from './lib/errors.js';
 import { Semaphore } from './lib/semaphore.js';
 import { HeuristicTokenCounter } from './lib/tokens.js';
@@ -12,10 +11,6 @@ import { makeAuthHook } from './plugins/auth.js';
 import { createMetrics, type Metrics } from './plugins/metrics.js';
 import { OllamaProvider } from './providers/ollama.js';
 import type { LLMProvider } from './providers/types.js';
-import { ConversationsRepo } from './repositories/conversations.js';
-import { GenerationsRepo } from './repositories/generations.js';
-import { ApiKeysRepo, UsersRepo } from './repositories/identity.js';
-import { MessagesRepo } from './repositories/messages.js';
 import { chatRoutes } from './routes/chat.js';
 import { conversationRoutes } from './routes/conversations.js';
 import { healthRoutes } from './routes/health.js';
@@ -23,13 +18,22 @@ import { modelRoutes } from './routes/models.js';
 import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
 import { ModelsService } from './services/models.service.js';
+import {
+  createStorage,
+  type ApiKeysStore,
+  type ConversationsStore,
+  type GenerationsStore,
+  type MessagesStore,
+  type Storage,
+  type UsersStore,
+} from './storage/index.js';
 import { ModelsRepo } from './repositories/models.js';
 import { meRoutes } from './routes/me.js';
 import { statsRoutes } from './routes/stats.js';
 
 export interface Deps {
   config: config;
-  db: Db;
+  storage: Storage;
   limiter: Semaphore;
   metrics: Metrics;
   provider: LLMProvider;
@@ -37,11 +41,11 @@ export interface Deps {
   conversations: ConversationService;
   models: ModelsService;
   repos: {
-    users: UsersRepo;
-    apiKeys: ApiKeysRepo;
-    conversations: ConversationsRepo;
-    messages: MessagesRepo;
-    generations: GenerationsRepo;
+    users: UsersStore;
+    apiKeys: ApiKeysStore;
+    conversations: ConversationsStore;
+    messages: MessagesStore;
+    generations: GenerationsStore;
     models: ModelsRepo;
   };
 }
@@ -49,7 +53,7 @@ export interface Deps {
 export interface BuildOptions {
   config?: config;
   provider?: LLMProvider;
-  database?: Database;
+  storage?: Storage;
 }
 
 export async function buildApp(opts: BuildOptions = {}) {
@@ -94,15 +98,14 @@ export async function buildApp(opts: BuildOptions = {}) {
   });
 
   // ---- composition root ----
-  const database = opts.database ?? createDb(config.DATABASE_URL);
-  const ownsDb = !opts.database;
-  const db = database.db;
+  const storage = opts.storage ?? createStorage(config);
+  const ownsStorage = !opts.storage;
   const repos = {
-    users: new UsersRepo(db),
-    apiKeys: new ApiKeysRepo(db),
-    conversations: new ConversationsRepo(db),
-    messages: new MessagesRepo(db),
-    generations: new GenerationsRepo(db),
+    users: storage.users,
+    apiKeys: storage.apiKeys,
+    conversations: storage.conversations,
+    messages: storage.messages,
+    generations: storage.generations,
     models: new ModelsRepo(config.allowedModels),
   };
   const limiter = new Semaphore(config.MAX_CONCURRENCY, config.MAX_QUEUE);
@@ -120,7 +123,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     messages: repos.messages,
     generations: repos.generations,
   });
-  const deps: Deps = { config, db, limiter, metrics, provider, auth, conversations, models, repos };
+  const deps: Deps = { config, storage, limiter, metrics, provider, auth, conversations, models, repos };
 
   let redis: Redis | null = null;
   if (config.REDIS_URL) {
@@ -134,7 +137,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   app.addHook('onClose', async () => {
     redis?.disconnect();
-    if (ownsDb) await database.close();
+    if (ownsStorage) await storage.close();
   });
 
   // ---- routes ----

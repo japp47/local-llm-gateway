@@ -4,9 +4,7 @@ import { QueueFullError, type Semaphore } from '../lib/semaphore.js';
 import type { TokenCounter } from '../lib/tokens.js';
 import type { Metrics } from '../plugins/metrics.js';
 import { ProviderError, type ChatMessage, type LLMProvider } from '../providers/types.js';
-import type { ConversationsRepo } from '../repositories/conversations.js';
-import type { GenerationsRepo } from '../repositories/generations.js';
-import type { MessagesRepo } from '../repositories/messages.js';
+import type { ConversationsStore, GenerationsStore, MessagesStore } from '../storage/index.js';
 import { buildContext, ContextTooLargeError } from './context-builder.js';
 
 export interface StartInfo {
@@ -59,9 +57,9 @@ export interface ConversationServiceDeps {
   limiter: Semaphore;
   metrics: Metrics;
   counter: TokenCounter;
-  conversations: ConversationsRepo;
-  messages: MessagesRepo;
-  generations: GenerationsRepo;
+  conversations: ConversationsStore;
+  messages: MessagesStore;
+  generations: GenerationsStore;
 }
 
 export class ConversationService {

@@ -1,10 +1,10 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { Deps } from '../app.js';
+import { decodeListCursor, encodeListCursor } from '../lib/cursor.js';
 import { AppError } from '../lib/errors.js';
 import { sseFrame, writeChunk } from '../lib/sse.js';
-import type { Conversation } from '../repositories/conversations.js';
-import type { Message } from '../repositories/messages.js';
+import type { Conversation, Message } from '../storage/index.js';
 
 const Params = z.object({ id: z.uuid() });
 const CreateBody = z.object({
@@ -20,7 +20,7 @@ const ForkBody = z.object({
 });
 const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  before: z.coerce.date().optional(),
+  cursor: z.string().min(1).max(200).optional(), // `nextCursor` from the previous page
 });
 const TranscriptQuery = z.object({
   after: z.coerce.number().int().min(0).default(0), // continue after this message `seq`
@@ -105,11 +105,13 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
 
   app.get('/conversations', async (req) => {
     const q = ListQuery.parse(req.query);
-    const rows = await repos.conversations.list(userId(req), q.limit, q.before);
-    const last = rows[rows.length - 1];
+    const after = q.cursor ? decodeListCursor(q.cursor) : undefined;
+    const rows = await repos.conversations.list(userId(req), q.limit + 1, after); // +1: is there more?
+    const page = rows.slice(0, q.limit);
+    const last = page[page.length - 1];
     return {
-      data: rows.map(toConversation),
-      nextBefore: rows.length === q.limit && last ? last.updatedAt : null,
+      data: page.map(toConversation),
+      nextCursor: rows.length > q.limit && last ? encodeListCursor(last) : null,
     };
   });
 

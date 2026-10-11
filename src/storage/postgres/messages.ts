@@ -1,25 +1,17 @@
 import { and, asc, count, desc, eq, gt } from 'drizzle-orm';
-import type { Db } from '../db/client.js';
-import { messages } from '../db/schema.js';
+import type { Db } from './client.js';
+import type { MessagesStore } from '../ports.js';
+import type { Message, NewMessage } from '../types.js';
+import { messages } from './schema.js';
 
-export type Message = typeof messages.$inferSelect;
-export type MessageStatus = 'complete' | 'partial' | 'error';
-
-export class MessagesRepo {
+export class PgMessagesStore implements MessagesStore {
   constructor(private readonly db: Db) {}
 
-  async add(v: {
-    conversationId: string;
-    role: 'user' | 'assistant' | 'system' | 'tool';
-    content: string;
-    status?: MessageStatus;
-    model?: string | null;
-  }) {
+  async add(v: NewMessage): Promise<Message> {
     const [row] = await this.db.insert(messages).values(v).returning();
     return row!;
   }
 
-  /** Newest `limit` messages, returned in chronological order. */
   async listRecent(conversationId: string, limit: number): Promise<Message[]> {
     const rows = await this.db
       .select()
@@ -30,11 +22,6 @@ export class MessagesRepo {
     return rows.reverse();
   }
 
-  /**
-   * One page of a transcript in chronological order, starting after `afterSeq`.
-   * `hasMore` says whether more messages exist beyond this page, so a long
-   * conversation is never silently cut off.
-   */
   async listPage(
     conversationId: string,
     afterSeq = 0,

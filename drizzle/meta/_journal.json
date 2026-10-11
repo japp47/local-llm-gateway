@@ -15,6 +15,13 @@
       "when": 1791218249991,
       "tag": "0001_conversation_forks",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791716977121,
+      "tag": "0002_conversations_updated_at_ms",
+      "breakpoints": true
     }
   ]
 }

@@ -5,15 +5,15 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run --exclude \"**/*.int.test.ts\"",
-    "dev": "tsx watch --env-file=.env src/server.ts",
+    "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "build": "tsc",
-    "start": "node --env-file=.env dist/server.js",
-    "bench": "tsx --env-file=.env scripts/bench.ts",
+    "start": "node --env-file-if-exists=.env dist/server.js",
+    "bench": "tsx --env-file-if-exists=.env scripts/bench.ts",
     "typecheck": "tsc -p tsconfig.check.json",
-    "test:int": "vitest run -c vitest.int.config.ts",
+    "test:int": "vitest run -c vitest.config.int.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
-    "key:create": "tsx --env-file=.env scripts/create-key.ts"
+    "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
+    "key:create": "tsx --env-file-if-exists=.env scripts/create-key.ts"
   },
   "keywords": [],
   "author": "",

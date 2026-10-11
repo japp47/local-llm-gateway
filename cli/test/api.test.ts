@@ -33,8 +33,8 @@ describe('ApiClient', () => {
   const client = () => new ApiClient({ baseUrl: base, apiKey: 'llmgw_test' });
 
   it('sends the bearer token and returns JSON', async () => {
-    handler = (_req, res) => void res.writeHead(200, { 'content-type': 'application/json' }).end('{"data":[],"nextBefore":null}');
-    expect(await client().listConversations(5)).toEqual({ data: [], nextBefore: null });
+    handler = (_req, res) => void res.writeHead(200, { 'content-type': 'application/json' }).end('{"data":[],"nextCursor":null}');
+    expect(await client().listConversations(5)).toEqual({ data: [], nextCursor: null });
     expect(lastAuth).toBe('Bearer llmgw_test');
   });
 

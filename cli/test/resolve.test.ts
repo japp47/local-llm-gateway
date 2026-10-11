@@ -20,7 +20,7 @@ describe('resolveConversationId', () => {
   const fake = (ids: string[]) => ({
     listConversations: async (limit = 20) => ({
       data: ids.slice(0, limit).map((id) => ({ id }) as never),
-      nextBefore: null,
+      nextCursor: null,
     }),
   });
   it('resolves latest, full ids and unique prefixes', async () => {

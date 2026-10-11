@@ -4,6 +4,7 @@
 import type {
   ApiKey,
   Conversation,
+  ConversationListKey,
   ForkInput,
   ForkResult,
   Generation,
@@ -36,7 +37,8 @@ export interface ConversationsStore {
   /** Copies history up to and including the anchor message, atomically. */
   fork(v: ForkInput): Promise<ForkResult>;
   get(userId: string, id: string): Promise<Conversation | null>;
-  list(userId: string, limit: number, before?: Date): Promise<Conversation[]>;
+  /** Most recently updated first; with `after`, only conversations that sort after that key. */
+  list(userId: string, limit: number, after?: ConversationListKey): Promise<Conversation[]>;
   rename(userId: string, id: string, title: string): Promise<Conversation | null>;
   remove(userId: string, id: string): Promise<boolean>;
   /** Atomic compare-and-set: succeeds only if nobody holds an unexpired lease. */

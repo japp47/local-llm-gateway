@@ -32,6 +32,12 @@ export interface Conversation {
   updatedAt: Date;
 }
 
+/** Position in the conversation list (newest first). The id breaks timestamp ties. */
+export interface ConversationListKey {
+  updatedAt: Date;
+  id: string;
+}
+
 export interface NewConversation {
   userId: string;
   defaultModel: string;

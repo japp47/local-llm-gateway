@@ -70,9 +70,10 @@ export class ApiClient {
     return (await response.json()) as T;
   }
 
-  listConversations(limit = 20, before?: string) {
+  /** Pass the previous page's `nextCursor` to continue. */
+  listConversations(limit = 20, cursor?: string) {
     const query = new URLSearchParams({ limit: String(limit) });
-    if (before) query.set('before', before);
+    if (cursor) query.set('cursor', cursor);
     return this.json<ConversationPage>('GET', `/v1/conversations?${query}`);
   }
 

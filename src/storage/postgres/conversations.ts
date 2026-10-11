@@ -1,7 +1,13 @@
 import { and, asc, desc, eq, inArray, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import type { Db } from './client.js';
 import type { ConversationsStore } from '../ports.js';
-import type { Conversation, ForkInput, ForkResult, NewConversation } from '../types.js';
+import type {
+  Conversation,
+  ConversationListKey,
+  ForkInput,
+  ForkResult,
+  NewConversation,
+} from '../types.js';
 import { conversations, messages } from './schema.js';
 
 export class PgConversationsStore implements ConversationsStore {
@@ -85,16 +91,19 @@ export class PgConversationsStore implements ConversationsStore {
     return row ?? null;
   }
 
-  async list(userId: string, limit: number, before?: Date): Promise<Conversation[]> {
+  async list(userId: string, limit: number, after?: ConversationListKey): Promise<Conversation[]> {
+    // Keyset paging on (updated_at, id): the id breaks ties so equal timestamps are never skipped.
+    const older = after
+      ? or(
+          lt(conversations.updatedAt, after.updatedAt),
+          and(eq(conversations.updatedAt, after.updatedAt), lt(conversations.id, after.id)),
+        )
+      : undefined;
     return this.db
       .select()
       .from(conversations)
-      .where(
-        before
-          ? and(eq(conversations.userId, userId), lt(conversations.updatedAt, before))
-          : eq(conversations.userId, userId),
-      )
-      .orderBy(desc(conversations.updatedAt))
+      .where(and(eq(conversations.userId, userId), older))
+      .orderBy(desc(conversations.updatedAt), desc(conversations.id))
       .limit(limit);
   }
 

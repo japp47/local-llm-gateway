@@ -3,10 +3,14 @@ import { buildApp, type Deps } from '../src/app.js';
 import { createConfig } from '../src/config.js';
 import { generateApiKey, sha256 } from '../src/lib/hash.js';
 import type { ChatEvent, ChatRequest, LLMProvider } from '../src/providers/types.js';
+import type { Storage } from '../src/storage/index.js';
 import { createPostgresStorage } from '../src/storage/postgres/index.js';
 
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test';
+
+/** Which storage backend the shared integration suite runs against. */
+export const TEST_BACKEND = process.env.TEST_BACKEND ?? 'postgres';
 
 export interface FakeScript {
   chunks: string[];
@@ -53,18 +57,27 @@ export class FakeProvider implements LLMProvider {
 
 let migrated = false;
 
+/** A migrated, empty storage for one test app. */
+async function createTestStorage(): Promise<Storage> {
+  if (TEST_BACKEND === 'postgres') {
+    const storage = createPostgresStorage(TEST_DB_URL);
+    if (!migrated) {
+      await storage.migrate();
+      migrated = true;
+    }
+    await storage.db.execute(
+      sql`truncate table generations, messages, conversations, api_keys, users restart identity cascade`,
+    );
+    return storage;
+  }
+  throw new Error(`TEST_BACKEND=${TEST_BACKEND} is not supported (expected: postgres)`);
+}
+
 export async function makeTestApp(
   provider?: LLMProvider,
   env: Record<string, string> = {},
 ) {
-  const storage = createPostgresStorage(TEST_DB_URL);
-  if (!migrated) {
-    await storage.migrate();
-    migrated = true;
-  }
-  await storage.db.execute(
-    sql`truncate table generations, messages, conversations, api_keys, users restart identity cascade`,
-  );
+  const storage = await createTestStorage();
 
   const config = createConfig({
     DATABASE_URL: TEST_DB_URL,

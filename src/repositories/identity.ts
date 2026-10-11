@@ -14,6 +14,15 @@ export class UsersRepo {
     const [row] = await this.db.insert(users).values({ email }).returning();
     return row!;
   }
+
+  async findById(id: string) {
+    const [row] = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, id))
+
+    return row ?? null;
+  }
 }
 
 export class ApiKeysRepo {

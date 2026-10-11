@@ -22,6 +22,10 @@ const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   before: z.coerce.date().optional(),
 });
+const TranscriptQuery = z.object({
+  after: z.coerce.number().int().min(0).default(0), // continue after this message `seq`
+  limit: z.coerce.number().int().min(1).max(500).default(500),
+});
 const SendBody = z.object({
   content: z.string().min(1).max(16_000),
   model: z.string().optional(),
@@ -41,6 +45,7 @@ const toConversation = (c: Conversation) => ({
 
 const toMessage = (m: Message) => ({
   id: m.id,
+  seq: m.seq,
   role: m.role,
   content: m.content,
   status: m.status,
@@ -110,10 +115,20 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
 
   app.get('/conversations/:id', async (req) => {
     const { id } = Params.parse(req.params);
+    const q = TranscriptQuery.parse(req.query);
     const conv = await repos.conversations.get(userId(req), id);
     if (!conv) throw new AppError(404, 'conversation_not_found', 'conversation not found');
-    const msgs = await repos.messages.listAll(conv.id);
-    return { ...toConversation(conv), messages: msgs.map(toMessage) };
+    const [page, messageCount] = await Promise.all([
+      repos.messages.listPage(conv.id, q.after, q.limit),
+      repos.messages.countAll(conv.id),
+    ]);
+    const last = page.rows[page.rows.length - 1];
+    return {
+      ...toConversation(conv),
+      messages: page.rows.map(toMessage),
+      messageCount, // total in the conversation, not just this page
+      nextAfter: page.hasMore && last ? last.seq : null, // pass as ?after= to get the next page
+    };
   });
 
   app.patch('/conversations/:id', async (req) => {

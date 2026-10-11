@@ -10,7 +10,7 @@
     "start": "node --env-file=.env dist/server.js",
     "bench": "tsx --env-file=.env scripts/bench.ts",
     "typecheck": "tsc -p tsconfig.check.json",
-    "test:int": "vitest run int",
+    "test:int": "vitest run -c vitest.int.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=.env scripts/migrate.ts",
     "key:create": "tsx --env-file=.env scripts/create-key.ts"

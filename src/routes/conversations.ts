@@ -3,8 +3,7 @@ import { z } from 'zod';
 import type { Deps } from '../app.js';
 import { AppError } from '../lib/errors.js';
 import { sseFrame, writeChunk } from '../lib/sse.js';
-import type { Conversation } from '../repositories/conversations.js';
-import type { Message } from '../repositories/messages.js';
+import type { Conversation, Message } from '../storage/index.js';
 
 const Params = z.object({ id: z.uuid() });
 const CreateBody = z.object({

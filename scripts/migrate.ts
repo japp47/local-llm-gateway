@@ -1,8 +1,7 @@
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { createConfig } from '../src/config.js';
-import { createDb } from '../src/db/client.js';
+import { createStorage } from '../src/storage/index.js';
 
-const { db, close } = createDb(createConfig().DATABASE_URL);
-await migrate(db, { migrationsFolder: './drizzle' });
-await close();
+const storage = createStorage(createConfig());
+await storage.migrate();
+await storage.close();
 console.log('migrations applied');

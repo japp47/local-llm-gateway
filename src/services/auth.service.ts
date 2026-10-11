@@ -1,5 +1,5 @@
 import { sha256 } from '../lib/hash.js';
-import type { ApiKeysRepo } from '../repositories/identity.js';
+import type { ApiKeysStore } from '../storage/index.js';
 
 export interface AuthContext {
   userId: string;
@@ -7,7 +7,7 @@ export interface AuthContext {
 }
 
 export class AuthService {
-  constructor(private readonly keys: ApiKeysRepo) {}
+  constructor(private readonly keys: ApiKeysStore) {}
 
   /** Hash first, then look up by hash: no raw-key comparison happens in app code. */
   async authenticate(rawKey: string): Promise<AuthContext | null> {

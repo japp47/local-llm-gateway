@@ -1,10 +1,9 @@
 import { sql } from 'drizzle-orm';
-import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import { buildApp, type Deps } from '../src/app.js';
 import { createConfig } from '../src/config.js';
-import { createDb } from '../src/db/client.js';
 import { generateApiKey, sha256 } from '../src/lib/hash.js';
 import type { ChatEvent, ChatRequest, LLMProvider } from '../src/providers/types.js';
+import { createPostgresStorage } from '../src/storage/postgres/index.js';
 
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test';
@@ -58,12 +57,12 @@ export async function makeTestApp(
   provider?: LLMProvider,
   env: Record<string, string> = {},
 ) {
-  const database = createDb(TEST_DB_URL);
+  const storage = createPostgresStorage(TEST_DB_URL);
   if (!migrated) {
-    await migrate(database.db, { migrationsFolder: './drizzle' });
+    await storage.migrate();
     migrated = true;
   }
-  await database.db.execute(
+  await storage.db.execute(
     sql`truncate table generations, messages, conversations, api_keys, users restart identity cascade`,
   );
 
@@ -74,7 +73,7 @@ export async function makeTestApp(
     DEFAULT_MODEL: 'fake-model',
     ...env,
   });
-  const { app, deps } = await buildApp({ config, provider, database });
+  const { app, deps } = await buildApp({ config, provider, storage });
 
   return {
     app,
@@ -82,7 +81,7 @@ export async function makeTestApp(
     addUser: (email: string) => addUser(deps, email),
     close: async () => {
       await app.close();
-      await database.close();
+      await storage.close();
     },
   };
 }
@@ -90,8 +89,8 @@ export async function makeTestApp(
 export async function addUser(deps: Deps, email: string) {
   const user = await deps.repos.users.create(email);
   const key = generateApiKey();
-  await deps.repos.apiKeys.create(user.id, sha256(key));
-  return { userId: user.id, key, headers: { authorization: `Bearer ${key}` } };
+  const apiKey = await deps.repos.apiKeys.create(user.id, sha256(key));
+  return { userId: user.id, keyId: apiKey.id, key, headers: { authorization: `Bearer ${key}` } };
 }
 
 export function parseSse(payload: string) {

@@ -1,8 +1,6 @@
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { generations, messages } from '../src/db/schema.js';
 import { OllamaProvider } from '../src/providers/ollama.js';
 import { makeTestApp, parseSse, waitFor } from './helpers.js';
 
@@ -121,9 +119,9 @@ describe('against a fake Ollama upstream', () => {
     const events = parseSse(res.payload);
     expect(events.some((e) => e.event === 'error')).toBe(true);
     expect(events.at(-1)!.data).toMatchObject({ type: 'done', status: 'error', assistantMessageId: null });
-    const rows = await t.deps.db.select().from(generations);
+    const rows = await t.deps.repos.generations.listByUser(a.userId);
     expect(rows[0]).toMatchObject({ status: 'error', errorCode: 'provider_error', messageId: null });
-    const msgs = await t.deps.db.select().from(messages);
+    const msgs = (await t.deps.repos.messages.listPage(conv.id)).rows;
     expect(msgs.map((m) => m.role)).toEqual(['user']);
   });
 
@@ -161,11 +159,11 @@ describe('against a fake Ollama upstream', () => {
     ac.abort();
 
     await waitFor(() => t.deps.limiter.inFlight === 0 && ollama.upstreamClosed);
-    await waitFor(async () => (await t.deps.db.select().from(generations)).length === 1);
+    await waitFor(async () => (await t.deps.repos.generations.listByUser(a.userId)).length === 1);
 
-    const rows = await t.deps.db.select().from(generations).where(eq(generations.conversationId, conv.id));
-    expect(rows[0]).toMatchObject({ status: 'partial', errorCode: 'aborted' });
-    const assistant = (await t.deps.db.select().from(messages)).find((m) => m.role === 'assistant');
+    const rows = await t.deps.repos.generations.listByUser(a.userId);
+    expect(rows[0]).toMatchObject({ conversationId: conv.id, status: 'partial', errorCode: 'aborted' });
+    const assistant = (await t.deps.repos.messages.listPage(conv.id)).rows.find((m) => m.role === 'assistant');
     expect(assistant).toMatchObject({ status: 'partial' });
     expect(assistant!.content).toContain('tok0');
 

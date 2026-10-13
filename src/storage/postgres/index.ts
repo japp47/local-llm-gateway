@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { migrationsFolder } from '../migrations-path.js';
 import type { Storage } from '../ports.js';
 import { createDb, type Db } from './client.js';
 import { PgConversationsStore } from './conversations.js';
@@ -22,7 +23,7 @@ export function createPostgresStorage(url: string): PostgresStorage {
     messages: new PgMessagesStore(db),
     generations: new PgGenerationsStore(db),
     ping: () => db.execute(sql`select 1`).then(() => true, () => false),
-    migrate: () => migrate(db, { migrationsFolder: './drizzle' }),
+    migrate: () => migrate(db, { migrationsFolder: migrationsFolder('') }),
     close,
   };
 }

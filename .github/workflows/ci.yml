@@ -36,3 +36,15 @@ jobs:
       - run: npm run test:int
         env:
           TEST_DATABASE_URL: postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test
+
+  # Single-user mode: the same shared suite on SQLite, with no database service at all.
+  sqlite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:int:sqlite

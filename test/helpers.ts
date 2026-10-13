@@ -5,6 +5,7 @@ import { generateApiKey, sha256 } from '../src/lib/hash.js';
 import type { ChatEvent, ChatRequest, LLMProvider } from '../src/providers/types.js';
 import type { Storage } from '../src/storage/index.js';
 import { createPostgresStorage } from '../src/storage/postgres/index.js';
+import { createSqliteStorage } from '../src/storage/sqlite/index.js';
 
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test';
@@ -70,7 +71,12 @@ async function createTestStorage(): Promise<Storage> {
     );
     return storage;
   }
-  throw new Error(`TEST_BACKEND=${TEST_BACKEND} is not supported (expected: postgres)`);
+  if (TEST_BACKEND === 'sqlite') {
+    const storage = createSqliteStorage(':memory:'); // private and empty for every app
+    await storage.migrate();
+    return storage;
+  }
+  throw new Error(`TEST_BACKEND=${TEST_BACKEND} is not supported (expected: postgres or sqlite)`);
 }
 
 export async function makeTestApp(

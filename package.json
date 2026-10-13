@@ -7,13 +7,14 @@
     "test": "vitest run --exclude \"**/*.int.test.ts\"",
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
     "build": "tsc",
-    "start": "node --env-file-if-exists=.env dist/server.js",
+    "start": "node --env-file-if-exists=.env dist/src/server.js",
     "bench": "tsx --env-file-if-exists=.env scripts/bench.ts",
     "typecheck": "tsc -p tsconfig.check.json",
     "test:int": "vitest run -c vitest.config.int.ts",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "drizzle-kit generate && drizzle-kit generate --config drizzle.sqlite.config.ts",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
-    "key:create": "tsx --env-file-if-exists=.env scripts/create-key.ts"
+    "key:create": "tsx --env-file-if-exists=.env scripts/create-key.ts",
+    "test:int:sqlite": "TEST_BACKEND=sqlite vitest run -c vitest.config.int.ts"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +22,7 @@
   "type": "module",
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
+    "better-sqlite3": "^13.0.3",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
     "ioredis": "^6.0.0",
@@ -29,6 +31,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.4",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",

@@ -16,9 +16,12 @@ export function getClient(): ApiClient {
   }
 
   if (!cfg.apiKey) {
+    if (cfg.localKeyIgnored) throw new CliError(cfg.localKeyIgnored);
     throw new CliError(
-      'No API key configured. Create one on the gateway (npm run key:create -- you@example.com),\n' +
-        'then run: llm profile add <name>   (you will be asked for the key)',
+      'No API key configured.\n' +
+        `- Gateway on this computer: start it once (npm start); it creates a key the CLI finds by itself.\n` +
+        '- Shared gateway: ask for a key (npm run key:create -- you@example.com on that server),\n' +
+        '  then run: llm profile add <name>   (you will be asked for the key)',
     );
   }
   return new ApiClient({ baseUrl: cfg.baseUrl, apiKey: cfg.apiKey });

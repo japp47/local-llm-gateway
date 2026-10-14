@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { localCredentialsPath, readLocalCredentials, sameLocalGateway } from './local-credentials.js';
 import { CONFIG_KEYS, DEFAULT_BASE_URL, PROFILE_RE } from './utils/constants.js';
 
 export interface CliProfile {
@@ -36,6 +37,10 @@ export interface CliConfig {
   keyWithheldFor?: string;
   /** Set when the config cannot be used as-is (for example the active profile was deleted). */
   profileProblem?: string;
+  /** Set when the key came from the single-user gateway on this machine, not from config. */
+  keySource?: 'local-gateway';
+  /** Why a local gateway key exists but was not used (for example, unsafe file permissions). */
+  localKeyIgnored?: string;
 }
 
 interface StoredConfig {
@@ -184,10 +189,15 @@ function writeConfig(file: StoredConfig, path: string): void {
  * If an active profile is set it is used; if it names a profile that no longer
  * exists, the saved flat credentials are NOT used as a fallback (see `profileProblem`).
  * With no active profile, the legacy flat settings apply.
+ *
+ * Last resort, when no key is configured at all: the key a single-user gateway on this
+ * machine leaves in its data folder, used only if the target URL is that same local
+ * gateway (see `keySource`).
  */
 export function loadConfig(
   env: Env = process.env,
   path = configPath(env),
+  localPath = localCredentialsPath(env),
 ): CliConfig {
   const file = readConfigFile(path);
 
@@ -240,6 +250,19 @@ export function loadConfig(
     overrides.push('model');
   }
 
+  let keySource: CliConfig['keySource'];
+  let localKeyIgnored: string | undefined;
+  if (!apiKey && !profileProblem) {
+    const local = readLocalCredentials(localPath);
+    if (local.kind === 'found' && sameLocalGateway(finalBase, local.credentials.baseUrl)) {
+      apiKey = local.credentials.apiKey;
+      keySource = 'local-gateway';
+      keyWithheldFor = undefined; // a key for exactly this gateway was found after all
+    } else if (local.kind === 'ignored') {
+      localKeyIgnored = local.reason;
+    }
+  }
+
   return {
     baseUrl: finalBase,
     apiKey,
@@ -248,6 +271,8 @@ export function loadConfig(
     overrides: overrides.length > 0 ? overrides : undefined,
     keyWithheldFor,
     profileProblem,
+    ...(keySource ? { keySource } : {}),
+    ...(localKeyIgnored ? { localKeyIgnored } : {}),
   };
 }
 

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ApiKeysStore, UsersStore } from '../ports.js';
 import type { ApiKey, User } from '../types.js';
 import type { SqliteDb } from './client.js';
@@ -45,5 +45,9 @@ export class SqliteApiKeysStore implements ApiKeysStore {
       .returning({ id: apiKeys.id })
       .all();
     return rows.length > 0;
+  }
+
+  async listForUser(userId: string): Promise<ApiKey[]> {
+    return this.db.select().from(apiKeys).where(eq(apiKeys.userId, userId)).orderBy(asc(apiKeys.createdAt)).all();
   }
 }

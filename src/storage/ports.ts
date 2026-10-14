@@ -29,6 +29,8 @@ export interface ApiKeysStore {
   findActiveByHash(keyHash: string): Promise<{ id: string; userId: string } | null>;
   /** True if the key was active and is now revoked. */
   revoke(id: string): Promise<boolean>;
+  /** All keys of one user, revoked ones included, oldest first. */
+  listForUser(userId: string): Promise<ApiKey[]>;
 }
 
 /** Every method that takes a userId is scoped by it: an id alone never grants access. */

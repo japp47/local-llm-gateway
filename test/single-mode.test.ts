@@ -8,7 +8,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
 import { createConfig, defaultDataDir } from '../src/config.js';
 import { acquireInstanceLock, StartupError } from '../src/lib/instance-lock.js';
+import { LOCAL_EMAIL, localCredentialsPath } from '../src/services/local-identity.js';
 import { lockPath, openStorage, sqlitePath } from '../src/storage/index.js';
+import { createSqliteStorage } from '../src/storage/sqlite/index.js';
 import { addUser, FakeProvider } from './helpers.js';
 
 const cleanup: (() => void | Promise<void>)[] = [];
@@ -22,12 +24,13 @@ function tempDataDir() {
   return join(root, 'nested', 'data'); // does not exist yet
 }
 
-const singleConfig = (dataDir: string) =>
+const singleConfig = (dataDir: string, env: Record<string, string> = {}) =>
   createConfig({
     DATA_DIR: dataDir,
     LOG_LEVEL: 'silent',
     ALLOWED_MODELS: 'fake-model',
     DEFAULT_MODEL: 'fake-model',
+    ...env,
   });
 
 /** A real, separate process whose PID we can put in a lock file, then kill. */
@@ -125,5 +128,77 @@ describe('one gateway per data folder', () => {
     expect(JSON.parse(readFileSync(path, 'utf8')).pid).toBe(process.pid);
     release();
     expect(existsSync(path)).toBe(false);
+  });
+});
+
+describe('zero-config identity', () => {
+  const readCreds = (config: ReturnType<typeof singleConfig>) =>
+    JSON.parse(readFileSync(localCredentialsPath(config), 'utf8')) as { baseUrl: string; apiKey: string };
+
+  /** Starts a gateway, returns what GET /v1/me says for `key`, and stops it again. */
+  async function meWith(config: ReturnType<typeof singleConfig>, key: string) {
+    const { app } = await buildApp({ config, provider: new FakeProvider() });
+    try {
+      return await app.inject({ method: 'GET', url: '/v1/me', headers: { authorization: `Bearer ${key}` } });
+    } finally {
+      await app.close();
+    }
+  }
+  const start = async (config: ReturnType<typeof singleConfig>) =>
+    (await buildApp({ config, provider: new FakeProvider() })).app.close();
+
+  it('creates a local user and a working key on first start, in a private file', async () => {
+    const config = singleConfig(tempDataDir(), { PORT: '3123' });
+    await start(config);
+
+    expect(statSync(localCredentialsPath(config)).mode & 0o777).toBe(0o600);
+    const creds = readCreds(config);
+    expect(creds.baseUrl).toBe('http://localhost:3123');
+    expect(creds.apiKey).toMatch(/^llmgw_/);
+
+    const me = await meWith(config, creds.apiKey);
+    expect(me.statusCode).toBe(200);
+    expect(me.json().email).toBe(LOCAL_EMAIL);
+  });
+
+  it('keeps the same key across restarts, and refreshes the URL when the port changes', async () => {
+    const dir = tempDataDir();
+    await start(singleConfig(dir));
+    const first = readCreds(singleConfig(dir));
+
+    await start(singleConfig(dir, { PORT: '4555' }));
+    const after = readCreds(singleConfig(dir));
+    expect(after.apiKey).toBe(first.apiKey);
+    expect(after.baseUrl).toBe('http://localhost:4555');
+  });
+
+  it('issues a new key and revokes the old one when the file is lost or damaged', async () => {
+    const config = singleConfig(tempDataDir());
+    await start(config);
+    const old = readCreds(config).apiKey;
+
+    rmSync(localCredentialsPath(config));
+    await start(config);
+    const replacement = readCreds(config).apiKey;
+    expect(replacement).not.toBe(old);
+    expect((await meWith(config, old)).statusCode).toBe(401); // a lost key stops working
+    expect((await meWith(config, replacement)).statusCode).toBe(200);
+
+    writeFileSync(localCredentialsPath(config), 'not json');
+    await start(config);
+    expect(readCreds(config).apiKey).not.toBe(replacement);
+  });
+
+  it('does nothing in server mode', async () => {
+    const dir = tempDataDir();
+    const config = createConfig({ DATABASE_URL: 'postgres://unused@127.0.0.1:1/x', DATA_DIR: dir, LOG_LEVEL: 'silent' });
+    const storage = createSqliteStorage(':memory:'); // stands in for Postgres: nothing may be created
+    await storage.migrate();
+    const { app } = await buildApp({ config, storage, provider: new FakeProvider() });
+    await app.close();
+
+    expect(existsSync(dir)).toBe(false);
+    expect(await storage.users.findByEmail(LOCAL_EMAIL)).toBeNull();
+    await storage.close();
   });
 });

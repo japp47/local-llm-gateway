@@ -17,6 +17,7 @@ import { healthRoutes } from './routes/health.js';
 import { modelRoutes } from './routes/models.js';
 import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
+import { ensureLocalIdentity } from './services/local-identity.js';
 import { ModelsService } from './services/models.service.js';
 import {
   openStorage,
@@ -101,6 +102,9 @@ export async function buildApp(opts: BuildOptions = {}) {
   // ---- composition root ----
   const storage = opts.storage ?? (await openStorage(config));
   const ownsStorage = !opts.storage;
+  // Single-user first run: create the local user and key, and leave them for the CLI.
+  const localIdentity =
+    config.mode === 'single' && ownsStorage ? await ensureLocalIdentity(storage, config) : null;
   const repos = {
     users: storage.users,
     apiKeys: storage.apiKeys,
@@ -144,6 +148,12 @@ export async function buildApp(opts: BuildOptions = {}) {
     },
     'gateway configured',
   );
+  if (localIdentity) {
+    app.log.info(
+      { credentials: localIdentity.path }, // the path only, never the key
+      localIdentity.created ? 'created a local API key for the CLI' : 'local API key ready',
+    );
+  }
 
   app.addHook('onClose', async () => {
     redis?.disconnect();

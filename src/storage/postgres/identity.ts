@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import type { Db } from './client.js';
 import type { ApiKeysStore, UsersStore } from '../ports.js';
 import type { ApiKey, User } from '../types.js';
@@ -47,5 +47,9 @@ export class PgApiKeysStore implements ApiKeysStore {
       .where(and(eq(apiKeys.id, id), isNull(apiKeys.revokedAt)))
       .returning({ id: apiKeys.id });
     return rows.length > 0;
+  }
+
+  async listForUser(userId: string): Promise<ApiKey[]> {
+    return this.db.select().from(apiKeys).where(eq(apiKeys.userId, userId)).orderBy(asc(apiKeys.createdAt));
   }
 }

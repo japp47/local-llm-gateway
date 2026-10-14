@@ -24,6 +24,20 @@ describe('storage contract', () => {
   const newConv = (userId: string) =>
     t.deps.repos.conversations.create({ userId, defaultModel: 'fake-model' });
 
+  it('lists a user\'s keys, revoked ones included, and never another user\'s', async () => {
+    const a = await t.addUser('a@example.com');
+    const b = await t.addUser('b@example.com');
+    const { apiKeys } = t.deps.repos;
+    const second = await apiKeys.create(a.userId, 'hash-of-second-key', 'laptop');
+    await apiKeys.revoke(a.keyId);
+
+    const keys = await apiKeys.listForUser(a.userId); // created in the same ms: order not asserted
+    expect(keys.map((k) => k.id).sort()).toEqual([a.keyId, second.id].sort());
+    expect(keys.find((k) => k.id === a.keyId)!.revokedAt).toBeInstanceOf(Date);
+    expect(keys.find((k) => k.id === second.id)).toMatchObject({ label: 'laptop', revokedAt: null });
+    expect((await apiKeys.listForUser(b.userId)).map((k) => k.id)).toEqual([b.keyId]);
+  });
+
   it('deleting a conversation removes its messages and keeps its generations, unlinked', async () => {
     const a = await t.addUser('a@example.com');
     const conv = await newConv(a.userId);

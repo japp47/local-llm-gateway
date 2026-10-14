@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate && drizzle-kit generate --config drizzle.sqlite.config.ts",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "key:create": "tsx --env-file-if-exists=.env scripts/create-key.ts",
-    "test:int:sqlite": "TEST_BACKEND=sqlite vitest run -c vitest.config.int.ts"
+    "test:int:sqlite": "TEST_BACKEND=sqlite vitest run -c vitest.config.int.ts",
+    "dev:single": "DATABASE_URL= REDIS_URL= tsx watch --env-file-if-exists=.env src/server.ts"
   },
   "keywords": [],
   "author": "",

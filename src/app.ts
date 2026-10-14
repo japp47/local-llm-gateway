@@ -19,7 +19,8 @@ import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
 import { ModelsService } from './services/models.service.js';
 import {
-  createStorage,
+  openStorage,
+  sqlitePath,
   type ApiKeysStore,
   type ConversationsStore,
   type GenerationsStore,
@@ -98,7 +99,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   });
 
   // ---- composition root ----
-  const storage = opts.storage ?? createStorage(config);
+  const storage = opts.storage ?? (await openStorage(config));
   const ownsStorage = !opts.storage;
   const repos = {
     users: storage.users,
@@ -134,6 +135,15 @@ export async function buildApp(opts: BuildOptions = {}) {
     });
     redis.on('error', (e) => app.log.warn({ err: e.message }, 'redis error'));
   }
+  app.log.info(
+    {
+      mode: config.mode,
+      storage: config.mode === 'server' ? 'postgres' : 'sqlite',
+      ...(config.mode === 'single' ? { path: sqlitePath(config) } : {}), // never log DATABASE_URL: it holds a password
+      rateLimit: redis ? 'redis' : 'memory',
+    },
+    'gateway configured',
+  );
 
   app.addHook('onClose', async () => {
     redis?.disconnect();

@@ -1,6 +1,6 @@
 import { createConfig } from '../src/config.js';
 import { generateApiKey, sha256 } from '../src/lib/hash.js';
-import { createStorage } from '../src/storage/index.js';
+import { openStorage } from '../src/storage/index.js';
 
 const email = process.argv[2];
 if (!email) {
@@ -8,7 +8,7 @@ if (!email) {
   process.exit(1);
 }
 
-const storage = createStorage(createConfig());
+const storage = await openStorage(createConfig());
 const { users, apiKeys: keys } = storage;
 
 const user = (await users.findByEmail(email)) ?? (await users.create(email));

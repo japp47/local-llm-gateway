@@ -190,6 +190,10 @@ cli_features() {
   bold "[$MODE] CLI"
   local out
   out=$(llm whoami); echo "$out" | sed 's/^/    /'; check "llm whoami -> $EXPECT_EMAIL" has "$out" "$EXPECT_EMAIL"
+  cmd "llm doctor --json"; out=$(node cli/dist/index.js doctor --json 2>&1); check "llm doctor --json: ok, database checked" bash -c 'jq -e ".ok and any(.checks[]; .id == \"database\" and .status == \"ok\")" <<<"$1" >/dev/null' _ "$out"
+  if [ "$MODE" = server ]; then
+    out=$(llm backup); check "llm backup in server mode points to pg_dump" has "$out" "pg_dump"
+  fi
   out=$(llm models); check "llm models lists $MODEL as default" has "$out" "$MODEL  (server default)"
   out=$(llm chat -q -t "cli chat" "Reply with exactly: cli works"); echo "$out" | sed 's/^/    /'
   check "llm chat (one-shot) answers" test -n "$out"
@@ -224,7 +228,7 @@ start_gw "${SINGLE_ENV[@]}"; check "gateway starts" test $? -eq 0
 check "log: mode single, sqlite, memory rate limit" grep -q '"mode":"single","storage":"sqlite".*"rateLimit":"memory"' "$WORK/gw-single.log"
 check "log: created a local API key" grep -q 'created a local API key for the CLI' "$WORK/gw-single.log"
 sleep 1 # the model check runs right after listen
-check "log: model picked to fit memory" grep -q "model $MODEL picked: needs ~.* GB of a .* GB budget" "$WORK/gw-single.log"
+check "log: model picked to fit memory" grep -q "Model $MODEL is ready: needs about .* of .* GB" "$WORK/gw-single.log"
 check "folder is 0700" is "$(stat -f %Lp "$DATA")" 700
 check "gateway.db is 0600" is "$(stat -f %Lp "$DATA/gateway.db")" 600
 check "local-credentials.json is 0600" is "$(stat -f %Lp "$DATA/local-credentials.json")" 600
@@ -241,6 +245,14 @@ check "127.0.0.1 counts as the same local gateway" has "$out" "local@localhost"
 out=$(LLM_BASE_URL=http://localhost:9 node cli/dist/index.js whoami 2>&1)
 cmd "LLM_BASE_URL=http://localhost:9 llm whoami"
 check "key not sent to another port (asks for a key instead)" has "$out" "No API key configured"
+
+bold "[$MODE] llm doctor"
+out=$(llm doctor); code=$?; echo "$out" | sed 's/^/    /'
+check "doctor: all good, exit 0" bash -c "[ $code -eq 0 ] && grep -q 'All good' <<<\"\$1\"" _ "$out"
+check "doctor: gateway's own checks included (model, database)" has "$out" "The database (SQLite) is up to date"
+out=$(LLM_BASE_URL=http://localhost:9 node cli/dist/index.js doctor 2>&1); code=$?
+cmd "LLM_BASE_URL=http://localhost:9 llm doctor"
+check "doctor with the gateway down: exit 1, says how to start it" bash -c "[ $code -eq 1 ] && grep -q 'npm start' <<<\"\$1\"" _ "$out"
 
 shared_features
 cli_features
@@ -262,6 +274,21 @@ stop_gw; check "Ctrl+C removes the lock" test ! -e "$DATA/gateway.lock"
 start_gw "${SINGLE_ENV[@]}"
 api GET '/v1/conversations?limit=100'; check "same $count_before conversations after restart" jqe ".data | length == $count_before"
 check "same key after restart" is "$(jq -r .apiKey "$DATA/local-credentials.json")" "$KEY"
+
+bold "[$MODE] Backup and restore"
+cmd "llm backup --json"; out=$(node cli/dist/index.js backup --json 2>&1); BACKUP=$(jq -r .file <<<"$out")
+check "llm backup writes a file under backups/" test -f "$BACKUP"
+check "backup holds all $count_before conversations" bash -c "jq -e '.conversations == $count_before' <<<\"\$1\" >/dev/null" _ "$out"
+check "backup file is 0600" is "$(stat -f %Lp "$BACKUP")" 600
+out=$(env "${SINGLE_ENV[@]}" npx tsx scripts/restore.ts "$BACKUP" 2>&1); cmd "npm run restore -- <backup>   (gateway running)"
+check "restore refuses while the assistant runs" has "$out" "The assistant is running. Stop it first"
+api POST /v1/conversations '{"title":"made after the backup"}'
+stop_gw
+out=$(env "${SINGLE_ENV[@]}" npx tsx scripts/restore.ts "$BACKUP" 2>&1); cmd "npm run restore -- <backup>"; echo "    $out"
+check "restore reports the conversations" has "$out" "Restored $count_before conversations"
+check "the replaced database is kept" bash -c 'ls "$1"/backups/before-restore-*.db >/dev/null 2>&1' _ "$DATA"
+start_gw "${SINGLE_ENV[@]}"
+api GET '/v1/conversations?limit=100'; check "after restore: the $count_before conversations from the backup" jqe ".data | length == $count_before"
 
 bold "[$MODE] Crash recovery (kill -9)"
 cmd "kill -9 <gateway>"; kill -9 "$GW_PID"; wait "$GW_PID" 2>/dev/null; GW_PID=""

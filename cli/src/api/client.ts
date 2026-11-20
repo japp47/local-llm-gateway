@@ -15,6 +15,7 @@ import type {
   StreamResult,
   Transcript,
   TranscriptPage,
+  BackupSummary,
   CurrentUser,
 } from './types.js';
 
@@ -124,6 +125,11 @@ export class ApiClient {
 
   me() {
     return this.json<CurrentUser>('GET', '/v1/me');
+  }
+
+  /** Asks the gateway to write a checked backup into its data folder. Single-user mode. */
+  backup() {
+    return this.json<BackupSummary>('POST', '/v1/backup');
   }
   
   models() {

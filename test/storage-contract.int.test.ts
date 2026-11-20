@@ -24,6 +24,12 @@ describe('storage contract', () => {
   const newConv = (userId: string) =>
     t.deps.repos.conversations.create({ userId, defaultModel: 'fake-model' });
 
+  it('reports a fully migrated database: every shipped migration applied', async () => {
+    const { applied, available } = await t.deps.storage.migrationStatus();
+    expect(available).toBeGreaterThan(0);
+    expect(applied).toBe(available);
+  });
+
   it('lists a user\'s keys, revoked ones included, and never another user\'s', async () => {
     const a = await t.addUser('a@example.com');
     const b = await t.addUser('b@example.com');

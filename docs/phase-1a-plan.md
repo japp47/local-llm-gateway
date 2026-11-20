@@ -297,6 +297,18 @@ e2e script (138 passed, both modes). Not done: setting the context size (Phase 2
   guidance. Round trip covered by a test.
 - Commits: `feat: add llm doctor diagnostics`, `feat: add tested backup and restore`.
 
+Done 2026-11-20. `llm doctor` (CLI) checks config, gateway (mode, or why it's down: lock
+file tells a crash from another port), key (with the rejected-key diagnosis), then the
+gateway's own `GET /v1/doctor`: Ollama, model and memory fit, database reachable and fully
+migrated (`Storage.migrationStatus`). Startup logs the same checks (`services/doctor.ts`).
+Backup lives in the gateway (decision A): `POST /v1/backup` → SQLite online backup into
+`DATA_DIR/backups/gateway-<time>.db` (0600, single file, integrity-checked); `llm backup`
+calls it. Restore needs the gateway stopped: `npm run restore -- <file>` takes the instance
+lock, checks the file, moves the current database (with WAL files) to
+`backups/before-restore-<time>.db`, never deletes. `llm restore` prints the steps. Server
+mode: both point to pg_dump / pg_restore. Round trip tested in the unit suite and in
+`scripts/e2e.sh` (153 passed, both modes).
+
 ### Step 7c: OpenAPI from zod (added by roadmap v3, independent)
 - Generate the spec from the route zod schemas and test responses against it in CI.
 - Commit: `feat: generate OpenAPI from the request schemas`.

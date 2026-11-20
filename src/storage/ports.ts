@@ -83,5 +83,12 @@ export interface Storage {
   ping(): Promise<boolean>;
   /** Brings the schema up to date. */
   migrate(): Promise<void>;
+  /** How many migrations ran, and how many this build ships. For `llm doctor`. */
+  migrationStatus(): Promise<{ applied: number; available: number }>;
+  /**
+   * Copies the live database to `dest`, consistent even while requests run. SQLite only:
+   * a shared Postgres database is backed up with Postgres's own tools (pg_dump).
+   */
+  backup?(dest: string): Promise<void>;
   close(): Promise<void>;
 }

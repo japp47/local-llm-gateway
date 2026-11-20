@@ -1,6 +1,6 @@
 import { sql } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
-import { migrationsFolder } from '../migrations-path.js';
+import { availableMigrations, migrationsFolder } from '../migrations-path.js';
 import type { Storage } from '../ports.js';
 import { createDb, type Db } from './client.js';
 import { PgConversationsStore } from './conversations.js';
@@ -24,6 +24,13 @@ export function createPostgresStorage(url: string): PostgresStorage {
     generations: new PgGenerationsStore(db),
     ping: () => db.execute(sql`select 1`).then(() => true, () => false),
     migrate: () => migrate(db, { migrationsFolder: migrationsFolder('') }),
+    migrationStatus: async () => {
+      const exists = await db.execute<{ t: string | null }>(sql`select to_regclass('drizzle.__drizzle_migrations')::text as t`);
+      const applied = exists[0]?.t
+        ? Number((await db.execute<{ n: string }>(sql`select count(*) as n from drizzle.__drizzle_migrations`))[0]?.n ?? 0)
+        : 0;
+      return { applied, available: availableMigrations('') };
+    },
     close,
   };
 }

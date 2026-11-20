@@ -18,6 +18,8 @@ Root (gateway):
 - `npm run db:generate` (generates Postgres AND SQLite migrations; schemas must change
   together) / `npm run db:migrate` (Postgres)
 - `npm run key:create -- you@example.com [label]` prints a raw API key once
+- `npm run restore -- <file>`: restore a single-user backup (gateway stopped; with
+  `DATABASE_URL` in `.env`, prefix `DATABASE_URL=`). `llm doctor`, `llm backup`.
 
 CLI (`cli/`, separate package, binary `llm`):
 - `npm ci && npm run build && npm test && npm run typecheck`
@@ -65,14 +67,20 @@ run the shared suite in both modes.
   records provider, model, TTFT (from opening, so it includes model load), queue wait,
   tokens, status. After the first complete answer per model, `/api/ps` is checked once
   and a warning is logged if the model spilled to the CPU or Ollama's context differs.
-- Startup (`server.ts` -> `services/startup-report.ts`): logs the picked model, or warns
-  (never exits) when Ollama is down or no model fits.
+- Health checks (`services/doctor.ts`): Ollama, model and memory fit, database reachable
+  and fully migrated (`Storage.migrationStatus`). Startup (`server.ts`) logs them and warns
+  (never exits); `GET /v1/doctor` returns them for `llm doctor`, which adds CLI-side
+  checks (config, gateway up and its mode, key) and works with the gateway down.
+- Backup (`services/backup.ts`, single-user only): `POST /v1/backup` writes a checked
+  SQLite online backup to `DATA_DIR/backups/` (0600); `llm backup` calls it. Restore runs
+  with the gateway stopped (`npm run restore -- <file>`, takes the instance lock) and
+  moves the replaced database aside, never deletes it. Server mode: pg_dump/pg_restore.
 - SSE contract: `start` -> `delta`* -> `meta` -> `done`, or `error`. `meta` carries
   provider, model, token counts, timings, `contextUsed`, `contextBudget`, `droppedMessages`.
 - Data: `users`, `api_keys` (SHA-256 hash only, `revokedAt`; revoked keys get 401),
   `conversations` (lease, parent/fork links), `messages` (`seq`, status
   complete|partial|error), `generations`.
-- API under `/v1`: `me`, `models`, `model`, `stats`, `conversations` (CRUD, messages,
+- API under `/v1`: `me`, `models`, `model`, `stats`, `doctor`, `backup`, `conversations` (CRUD, messages,
   `POST /:id/forks`), transcript paging `GET /conversations/:id?after=&limit=` returning
   `messageCount` and `nextAfter`. The conversation list pages with an opaque cursor
   (`GET /conversations?limit=&cursor=` -> `nextCursor`), keyset on `(updated_at, id)`;
@@ -139,8 +147,7 @@ run the shared suite in both modes.
 Phases:
 - 0 Stabilize: DONE (CLI credential safety, transcript paging, `/v1/stats`, integration
   tests, CI runs CLI checks).
-- 1 One-click app (IN PROGRESS: 1a steps 0-7 done; next is step 7b, `llm doctor` and
-  backup/restore). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
+- 1 One-click app (IN PROGRESS: 1a steps 0-7b done; next is step 7c, OpenAPI from zod). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
   limiting instead of Postgres/Redis, zero-config first run, model auto-picked by RAM,
   `llm doctor` diagnostics, tested `llm backup`/`llm restore`, OpenAPI from zod schemas,
   a migration upgrade test. 1b (after the wedge decision): installer and local web chat.

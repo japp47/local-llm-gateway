@@ -64,6 +64,10 @@ export class OllamaModels {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
+  async version(): Promise<string> {
+    return (await this.get<{ version?: string }>('/api/version')).version ?? 'unknown';
+  }
+
   /** Throws ProviderError('ollama_unavailable') when Ollama can't be reached. */
   async installed(): Promise<InstalledModel[]> {
     const tags = await this.get<TagsJson>('/api/tags');

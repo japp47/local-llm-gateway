@@ -118,6 +118,28 @@ describe('ApiClient', () => {
     expect(describeError(err)).toMatch(/still generating/);
   });
 
+  it('backup posts to /v1/backup and returns where the file went', async () => {
+    let seen = '';
+    handler = (req, res) => {
+      seen = `${req.method} ${req.url}`;
+      res.writeHead(201, { 'content-type': 'application/json' }).end(
+        '{"file":"/d/backups/gateway-20261120-193005.db","conversations":2,"messages":4,"bytes":4096,"createdAt":"x"}',
+      );
+    };
+    expect(await client().backup()).toMatchObject({ conversations: 2, file: '/d/backups/gateway-20261120-193005.db' });
+    expect(seen).toBe('POST /v1/backup');
+  });
+
+  it('backup in server mode shows the Postgres hint', async () => {
+    handler = (_req, res) => {
+      res.writeHead(409, { 'content-type': 'application/json' }).end(
+        '{"error":{"code":"backup_failed","message":"This gateway uses a shared Postgres database.","hint":"Run: pg_dump ..."}}',
+      );
+    };
+    const err = await client().backup().catch((e) => e);
+    expect(describeError(err)).toBe('This gateway uses a shared Postgres database.\n  → Run: pg_dump ...');
+  });
+
   it('raises a ConnectionError with a hint when the gateway is down', async () => {
     const dead = new ApiClient({ baseUrl: 'http://127.0.0.1:1', apiKey: 'k' });
     const err = await dead.models().catch((e) => e);

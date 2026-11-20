@@ -21,7 +21,8 @@ import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
 import { ensureLocalIdentity } from './services/local-identity.js';
 import { makeFitChecker } from './services/model-fit.js';
-import { ModelsService, type ModelSource } from './services/models.service.js';
+import type { OllamaInfo } from './services/doctor.js';
+import { ModelsService } from './services/models.service.js';
 import {
   openStorage,
   sqlitePath,
@@ -34,6 +35,8 @@ import {
 } from './storage/index.js';
 import { meRoutes } from './routes/me.js';
 import { statsRoutes } from './routes/stats.js';
+import { doctorRoutes } from './routes/doctor.js';
+import { backupRoutes } from './routes/backup.js';
 
 export interface Deps {
   config: config;
@@ -42,7 +45,7 @@ export interface Deps {
   metrics: Metrics;
   provider: LLMProvider;
   /** Model metadata from Ollama (installed, loaded). Used for model discovery and diagnostics. */
-  ollama: OllamaModels;
+  ollama: OllamaInfo;
   auth: AuthService;
   conversations: ConversationService;
   models: ModelsService;
@@ -59,8 +62,8 @@ export interface BuildOptions {
   config?: config;
   provider?: LLMProvider;
   storage?: Storage;
-  /** Tests: stand-ins for Ollama's model list and this machine's memory. */
-  modelSource?: ModelSource;
+  /** Tests: stand-ins for Ollama's metadata API and this machine's memory. */
+  ollama?: OllamaInfo;
   totalMemoryBytes?: number;
 }
 
@@ -121,11 +124,11 @@ export async function buildApp(opts: BuildOptions = {}) {
   const limiter = new Semaphore(config.MAX_CONCURRENCY, config.MAX_QUEUE);
   const metrics = createMetrics(limiter);
   const provider = opts.provider ?? new OllamaProvider(config.OLLAMA_URL);
-  const ollama = new OllamaModels(config.OLLAMA_URL);
+  const ollama = opts.ollama ?? new OllamaModels(config.OLLAMA_URL);
   const auth = new AuthService(repos.apiKeys);
   const models = new ModelsService({
     ...config.models,
-    source: opts.modelSource ?? ollama,
+    source: ollama,
     totalMemoryBytes: opts.totalMemoryBytes ?? totalmem(),
     contextTokens: config.MODEL_CONTEXT_TOKENS,
   });
@@ -195,6 +198,8 @@ export async function buildApp(opts: BuildOptions = {}) {
       await v1.register(conversationRoutes, { deps });
       await v1.register(meRoutes, { deps });
       await v1.register(statsRoutes, { deps });
+      await v1.register(doctorRoutes, { deps });
+      await v1.register(backupRoutes, { deps });
     },
     { prefix: '/v1' },
   );

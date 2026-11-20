@@ -1,7 +1,7 @@
 import { buildApp } from './app.js';
 import { createConfig } from './config.js';
 import { StartupError } from './lib/instance-lock.js';
-import { startupReport } from './services/startup-report.js';
+import { gatewayChecks } from './services/doctor.js';
 
 const config = createConfig();
 let built: Awaited<ReturnType<typeof buildApp>>;
@@ -23,13 +23,26 @@ try {
   process.exit(1);
 }
 
-// Warn, don't fail: Ollama may start (or a model be pulled) after the gateway.
+// The same checks as `llm doctor`. Warn, don't fail: Ollama may start (or a model be
+// pulled) after the gateway, and requests then work without a restart.
 try {
-  for (const line of await startupReport(built.deps.models, built.deps.ollama, config.models.defaultModel)) {
-    app.log[line.level](line.data ?? {}, line.msg);
+  const { deps } = built;
+  const checks = await gatewayChecks({
+    mode: config.mode,
+    models: deps.models,
+    ollama: deps.ollama,
+    defaultModel: config.models.defaultModel,
+    contextTokens: config.MODEL_CONTEXT_TOKENS,
+    storage: deps.storage,
+  });
+  for (const c of checks) {
+    const later = c.id === 'ollama' && c.status === 'fail' ? ' The gateway keeps running and will use it once it starts.' : '';
+    const text = `${c.message}${c.hint ? ` ${c.hint}` : ''}${later}`;
+    if (c.status === 'ok') app.log.info({ check: c.id }, text);
+    else app.log.warn({ check: c.id }, text);
   }
 } catch (err) {
-  app.log.warn({ err: (err as Error).message }, 'model check at startup failed');
+  app.log.warn({ err: (err as Error).message }, 'startup checks failed');
 }
 
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {

@@ -160,3 +160,10 @@ export interface CurrentUser {
   id: string;
   email: string;
 }
+export interface BackupSummary {
+  file: string;
+  conversations: number;
+  messages: number;
+  bytes: number;
+  createdAt: string;
+}

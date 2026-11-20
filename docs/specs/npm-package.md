@@ -68,9 +68,10 @@ today. Server mode works by setting the same environment variables (`DATABASE_UR
   in the gate walk. `npx` avoids it for trying out.
 
 ## Follow-ups found after publishing
-- Plain `npx local-llm-gateway` fails ("could not determine executable to run"): the package
-  has two commands and neither is named after it. Fix in 0.1.1: add a `local-llm-gateway`
-  command that starts the assistant. Until then: `npx -p local-llm-gateway llm start`.
-- npm warns that `prom-client` is deprecated (replaced by `@prometheus-io/client`).
+- Plain `npx local-llm-gateway` failed in 0.1.0 ("could not determine executable to run"):
+  two commands, neither named after the package. Fixed in 0.1.1 (a `local-llm-gateway`
+  command that starts the assistant).
+- npm warned that `prom-client` is deprecated. Fixed in 0.1.1: `@prometheus-io/client`, the
+  same library under its new name.
 - First publish of a new name goes through npm's staged publishing: a public placeholder
   `0.0.0-stage` appears first, the real version a few minutes later.

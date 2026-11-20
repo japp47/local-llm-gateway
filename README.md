@@ -28,8 +28,8 @@ stops it.
 llm chat "hello"
 ```
 
-To try it without installing: `npx -p local-llm-gateway llm start` (and
-`npx -p local-llm-gateway llm chat "hello"` in a second window).
+To try it without installing: `npx local-llm-gateway` starts the assistant, and
+`npx -p local-llm-gateway llm chat "hello"` chats from a second window.
 
 No key to copy: `llm` finds the one the assistant made. If anything doesn't work:
 

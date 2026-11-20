@@ -32,8 +32,13 @@ ok "packed $TARBALL ($(du -h "$WORK/$TARBALL" | cut -f1))"
 step "Install into an empty folder, as a stranger would"
 npm install --global --silent --prefix "$WORK/prefix" "$WORK/$TARBALL"
 LLM="$WORK/prefix/bin/llm"
-[ -x "$LLM" ] && [ -x "$WORK/prefix/bin/llm-gateway" ] || fail "bin commands llm and llm-gateway installed"
-ok "llm and llm-gateway are on the path"
+for cmd in llm llm-gateway local-llm-gateway; do [ -x "$WORK/prefix/bin/$cmd" ] || fail "command $cmd installed"; done
+ok "llm, llm-gateway and local-llm-gateway are on the path"
+# `npx local-llm-gateway` runs the command named after the package: it must be the server.
+[ "$(readlink "$WORK/prefix/bin/local-llm-gateway")" = "$(readlink "$WORK/prefix/bin/llm-gateway")" ] || fail "local-llm-gateway starts the assistant"
+ok "local-llm-gateway (what npx runs) starts the assistant"
+npm install --global --prefix "$WORK/prefix" "$WORK/$TARBALL" 2>&1 | grep -qi "deprecated" && fail "installing prints no deprecation warnings"
+ok "installing prints no deprecation warnings"
 
 # A clean environment: own data folder, own CLI config, a free port, Ollama not running.
 export DATA_DIR="$WORK/data" XDG_CONFIG_HOME="$WORK/config" PORT=3993

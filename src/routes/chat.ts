@@ -1,34 +1,17 @@
 // Legacy stateless passthrough. Kept working while conversations are built beside it.
 import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
+import { LegacyChatBody as Body } from '../api/schemas.js';
 import type { Deps } from '../app.js';
 import { AppError } from '../lib/errors.js';
 import { QueueFullError } from '../lib/semaphore.js';
 import { writeChunk } from '../lib/sse.js';
-
-const Body = z.object({
-  model: z.string(),
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(['system', 'user', 'assistant']),
-        content: z.string().max(32_000),
-      }),
-    )
-    .min(1),
-  stream: z.boolean().optional().default(false),
-  temperature: z.number().min(0).max(2).optional(),
-  max_tokens: z.number().int().positive().max(2048).optional(),
-});
 
 export const chatRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps }) => {
   const { config, limiter, metrics } = deps;
 
   app.post('/chat/completions', async (req, reply) => {
     const body = Body.parse(req.body);
-    if (!config.allowedModels.has(body.model)) {
-      throw new AppError(400, 'model_not_allowed', `model not allowed: ${body.model}`);
-    }
+    await deps.models.check(body.model);
 
     const ac = new AbortController();
     const timeout = setTimeout(() => ac.abort(), config.REQUEST_TIMEOUT_MS);
@@ -43,7 +26,7 @@ export const chatRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps
       clearTimeout(timeout);
       if (err instanceof QueueFullError) {
         metrics.rejected.inc({ reason: 'queue_full' });
-        throw new AppError(503, 'server_busy', 'server busy, retry later', { 'retry-after': '5' });
+        throw new AppError(503, 'server_busy', 'server busy, retry later', { headers: { 'retry-after': '5' } });
       }
       throw new AppError(504, 'cancelled', 'cancelled or timed out while queued');
     }

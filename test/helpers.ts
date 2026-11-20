@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { buildApp, type Deps } from '../src/app.js';
 import { createConfig } from '../src/config.js';
 import { generateApiKey, sha256 } from '../src/lib/hash.js';
-import type { ChatEvent, ChatRequest, LLMProvider } from '../src/providers/types.js';
+import type { ChatEvent, ChatRequest, LLMProvider, ProviderError } from '../src/providers/types.js';
 import type { Storage } from '../src/storage/index.js';
 import { createPostgresStorage } from '../src/storage/postgres/index.js';
 import { createSqliteStorage } from '../src/storage/sqlite/index.js';
@@ -16,6 +16,7 @@ export const TEST_BACKEND = process.env.TEST_BACKEND ?? 'postgres';
 export interface FakeScript {
   chunks: string[];
   failAfter?: number; // throw after emitting this many chunks
+  refuse?: ProviderError; // reject when opening, like a stopped Ollama or a missing model
   usage?: { promptTokens: number; completionTokens: number };
 }
 
@@ -40,9 +41,14 @@ export class FakeProvider implements LLMProvider {
     this.openGate?.();
   }
 
-  async *chat(req: ChatRequest): AsyncGenerator<ChatEvent> {
+  async chat(req: ChatRequest): Promise<AsyncIterable<ChatEvent>> {
     this.calls.push(req);
-    this.markStarted();
+    if (this.script.refuse) throw this.script.refuse;
+    return this.stream(req);
+  }
+
+  private async *stream(req: ChatRequest): AsyncGenerator<ChatEvent> {
+    this.markStarted(); // the stream is open: the user message is saved by now
     if (this.gate) await this.gate;
     let i = 0;
     for (const text of this.script.chunks) {
@@ -92,11 +98,12 @@ export async function makeTestApp(
     DEFAULT_MODEL: 'fake-model',
     ...env,
   });
-  const { app, deps } = await buildApp({ config, provider, storage });
+  const { app, deps, routes } = await buildApp({ config, provider, storage });
 
   return {
     app,
     deps,
+    routes,
     addUser: (email: string) => addUser(deps, email),
     close: async () => {
       await app.close();

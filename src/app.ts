@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { totalmem } from 'node:os';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { Redis } from 'ioredis';
@@ -10,6 +11,7 @@ import { HeuristicTokenCounter } from './lib/tokens.js';
 import { makeAuthHook } from './plugins/auth.js';
 import { createMetrics, type Metrics } from './plugins/metrics.js';
 import { OllamaProvider } from './providers/ollama.js';
+import { OllamaModels } from './providers/ollama-models.js';
 import type { LLMProvider } from './providers/types.js';
 import { chatRoutes } from './routes/chat.js';
 import { conversationRoutes } from './routes/conversations.js';
@@ -17,6 +19,9 @@ import { healthRoutes } from './routes/health.js';
 import { modelRoutes } from './routes/models.js';
 import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
+import { ensureLocalIdentity } from './services/local-identity.js';
+import { makeFitChecker } from './services/model-fit.js';
+import type { OllamaInfo } from './services/doctor.js';
 import { ModelsService } from './services/models.service.js';
 import {
   openStorage,
@@ -28,9 +33,10 @@ import {
   type Storage,
   type UsersStore,
 } from './storage/index.js';
-import { ModelsRepo } from './repositories/models.js';
 import { meRoutes } from './routes/me.js';
 import { statsRoutes } from './routes/stats.js';
+import { doctorRoutes } from './routes/doctor.js';
+import { backupRoutes } from './routes/backup.js';
 
 export interface Deps {
   config: config;
@@ -38,6 +44,8 @@ export interface Deps {
   limiter: Semaphore;
   metrics: Metrics;
   provider: LLMProvider;
+  /** Model metadata from Ollama (installed, loaded). Used for model discovery and diagnostics. */
+  ollama: OllamaInfo;
   auth: AuthService;
   conversations: ConversationService;
   models: ModelsService;
@@ -47,7 +55,6 @@ export interface Deps {
     conversations: ConversationsStore;
     messages: MessagesStore;
     generations: GenerationsStore;
-    models: ModelsRepo;
   };
 }
 
@@ -55,6 +62,9 @@ export interface BuildOptions {
   config?: config;
   provider?: LLMProvider;
   storage?: Storage;
+  /** Tests: stand-ins for Ollama's metadata API and this machine's memory. */
+  ollama?: OllamaInfo;
+  totalMemoryBytes?: number;
 }
 
 export async function buildApp(opts: BuildOptions = {}) {
@@ -70,11 +80,24 @@ export async function buildApp(opts: BuildOptions = {}) {
     reply.header('x-request-id', req.id);
   });
 
+  // Every registered route, so the contract test can check each one is documented.
+  const routes: { method: string; url: string }[] = [];
+  app.addHook('onRoute', (r) => {
+    for (const method of [r.method].flat()) if (method !== 'HEAD') routes.push({ method, url: r.url });
+  });
+
+  // Unknown URLs get the same error shape as everything else.
+  app.setNotFoundHandler((req, reply) =>
+    reply.code(404).send({
+      error: { code: 'not_found', message: `There is no ${req.method} ${req.url.split('?')[0]}.`, request_id: req.id },
+    }),
+  );
+
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof AppError) {
       for (const [k, v] of Object.entries(err.headers)) reply.header(k, v);
       return reply.code(err.status).send({
-        error: { code: err.code, message: err.message, request_id: req.id },
+        error: { code: err.code, message: err.message, ...(err.hint ? { hint: err.hint } : {}), request_id: req.id },
       });
     }
     if (err instanceof ZodError) {
@@ -101,22 +124,35 @@ export async function buildApp(opts: BuildOptions = {}) {
   // ---- composition root ----
   const storage = opts.storage ?? (await openStorage(config));
   const ownsStorage = !opts.storage;
+  // Single-user first run: create the local user and key, and leave them for the CLI.
+  const localIdentity =
+    config.mode === 'single' && ownsStorage ? await ensureLocalIdentity(storage, config) : null;
   const repos = {
     users: storage.users,
     apiKeys: storage.apiKeys,
     conversations: storage.conversations,
     messages: storage.messages,
     generations: storage.generations,
-    models: new ModelsRepo(config.allowedModels),
   };
   const limiter = new Semaphore(config.MAX_CONCURRENCY, config.MAX_QUEUE);
   const metrics = createMetrics(limiter);
   const provider = opts.provider ?? new OllamaProvider(config.OLLAMA_URL);
+  const ollama = opts.ollama ?? new OllamaModels(config.OLLAMA_URL);
   const auth = new AuthService(repos.apiKeys);
-  const models = new ModelsService(repos.models, config.DEFAULT_MODEL);
+  const models = new ModelsService({
+    ...config.models,
+    source: ollama,
+    totalMemoryBytes: opts.totalMemoryBytes ?? totalmem(),
+    contextTokens: config.MODEL_CONTEXT_TOKENS,
+  });
   const conversations = new ConversationService({
     config,
     provider,
+    models,
+    // Only for real Ollama: a test's fake provider has nothing loaded to inspect.
+    onAnswered: opts.provider
+      ? undefined
+      : makeFitChecker(ollama, config.MODEL_CONTEXT_TOKENS, (msg) => app.log.warn(msg)),
     limiter,
     metrics,
     counter: new HeuristicTokenCounter(),
@@ -124,7 +160,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     messages: repos.messages,
     generations: repos.generations,
   });
-  const deps: Deps = { config, storage, limiter, metrics, provider, auth, conversations, models, repos };
+  const deps: Deps = { config, storage, limiter, metrics, provider, ollama, auth, conversations, models, repos };
 
   let redis: Redis | null = null;
   if (config.REDIS_URL) {
@@ -144,6 +180,12 @@ export async function buildApp(opts: BuildOptions = {}) {
     },
     'gateway configured',
   );
+  if (localIdentity) {
+    app.log.info(
+      { credentials: localIdentity.path }, // the path only, never the key
+      localIdentity.created ? 'created a local API key for the CLI' : 'local API key ready',
+    );
+  }
 
   app.addHook('onClose', async () => {
     redis?.disconnect();
@@ -169,9 +211,11 @@ export async function buildApp(opts: BuildOptions = {}) {
       await v1.register(conversationRoutes, { deps });
       await v1.register(meRoutes, { deps });
       await v1.register(statsRoutes, { deps });
+      await v1.register(doctorRoutes, { deps });
+      await v1.register(backupRoutes, { deps });
     },
     { prefix: '/v1' },
   );
 
-  return { app, deps };
+  return { app, deps, routes };
 }

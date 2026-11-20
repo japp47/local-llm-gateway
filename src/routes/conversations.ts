@@ -1,36 +1,18 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
+import {
+  CreateConversationBody as CreateBody,
+  ForkBody,
+  IdParams as Params,
+  ListConversationsQuery as ListQuery,
+  RenameConversationBody as RenameBody,
+  SendMessageBody as SendBody,
+  TranscriptQuery,
+} from '../api/schemas.js';
 import type { Deps } from '../app.js';
 import { decodeListCursor, encodeListCursor } from '../lib/cursor.js';
 import { AppError } from '../lib/errors.js';
 import { sseFrame, writeChunk } from '../lib/sse.js';
 import type { Conversation, Message } from '../storage/index.js';
-
-const Params = z.object({ id: z.uuid() });
-const CreateBody = z.object({
-  title: z.string().min(1).max(200).optional(),
-  model: z.string().optional(),
-  systemPrompt: z.string().max(8_000).optional(),
-});
-const RenameBody = z.object({ title: z.string().min(1).max(200) });
-const ForkBody = z.object({
-  fromMessageId: z.uuid(),
-  title: z.string().min(1).max(200).optional(),
-  defaultModel: z.string().optional(),
-});
-const ListQuery = z.object({
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  cursor: z.string().min(1).max(200).optional(), // `nextCursor` from the previous page
-});
-const TranscriptQuery = z.object({
-  after: z.coerce.number().int().min(0).default(0), // continue after this message `seq`
-  limit: z.coerce.number().int().min(1).max(500).default(500),
-});
-const SendBody = z.object({
-  content: z.string().min(1).max(16_000),
-  model: z.string().optional(),
-  temperature: z.number().min(0).max(2).optional(),
-});
 
 const toConversation = (c: Conversation) => ({
   id: c.id,
@@ -59,10 +41,8 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
 
   app.post('/conversations', async (req, reply) => {
     const body = CreateBody.parse(req.body ?? {});
-    const model = body.model ?? config.DEFAULT_MODEL;
-    if (!config.allowedModels.has(model)) {
-      throw new AppError(400, 'model_not_allowed', `model not allowed: ${model}`);
-    }
+    const model = body.model ?? (await deps.models.getDefault()).id;
+    await deps.models.check(model);
     const conv = await repos.conversations.create({
       userId: userId(req),
       defaultModel: model,
@@ -75,13 +55,7 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
   app.post('/conversations/:id/forks', async (req, reply) => {
     const { id } = Params.parse(req.params);
     const body = ForkBody.parse(req.body);
-    if (body.defaultModel !== undefined && !config.allowedModels.has(body.defaultModel)) {
-      throw new AppError(
-        400,
-        'model_not_allowed',
-        `model not allowed: ${body.defaultModel}`,
-      );
-    }
+    if (body.defaultModel !== undefined) await deps.models.check(body.defaultModel);
 
     const result = await repos.conversations.fork({
       userId: userId(req),

@@ -1,6 +1,7 @@
 import { createInterface } from 'node:readline';
 import { ApiClient, ApiError, type StreamMeta, type StreamResult } from './api.js';
-import { CliError, describeError } from './errors.js';
+import { CliError, withHint } from './errors.js';
+import { describeErrorFully } from './key-diagnosis.js';
 import { errc, formatMessage, formatMetaLine, out, shortId, tokPerSec } from './format.js';
 import { resolveConversationId, resolveMessageRef } from './resolve.js';
 import { HELP } from './utils/constants.js';
@@ -22,7 +23,10 @@ export function printSummary(res: StreamResult, quiet: boolean): boolean {
     console.error(errc.yellow('⚠ cancelled — the partial reply was saved.'));
     ok = false;
   } else if (res.error) {
-    console.error(errc.red(`✗ generation failed (${res.error.code}).${res.text ? ' The partial reply was saved.' : ''}`));
+    // Newer gateways send a readable message and a hint; older ones only "generation failed".
+    const { code, message, hint } = res.error;
+    const saved = res.text ? ' What arrived so far was saved.' : '';
+    console.error(errc.red(withHint(hint ? `✗ ${message}${saved}` : `✗ ${message} (${code}).${saved}`, hint)));
     ok = false;
   } else if (res.incomplete) {
     console.error(errc.yellow('⚠ the stream ended unexpectedly; the reply may be incomplete.'));
@@ -224,7 +228,7 @@ export async function runRepl(opts: ReplOptions): Promise<void> {
         await turn(line);
       }
     } catch (e) {
-      console.error(errc.red(describeError(e)));
+      console.error(errc.red(await describeErrorFully(e)));
     }
     rl.setPrompt(promptText());
     rl.prompt();

@@ -1,5 +1,5 @@
+import { classifyFetchFailure, classifyHttpFailure, classifyStreamFailure } from './ollama-errors.js';
 import type { ChatEvent, ChatRequest, LLMProvider } from './types.js';
-import { ProviderError } from './types.js';
 
 interface ChunkJson {
   choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
@@ -42,40 +42,58 @@ export class OllamaProvider implements LLMProvider {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async *chat(req: ChatRequest): AsyncGenerator<ChatEvent> {
-    const res = await this.fetchImpl(`${this.baseUrl}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: req.model,
-        messages: req.messages,
-        stream: true,
-        stream_options: { include_usage: true },
-        temperature: req.temperature,
-        max_tokens: req.maxTokens,
-      }),
-      signal: req.signal,
-    });
-
-    if (!res.ok || !res.body) {
-      const detail = (await res.text().catch(() => '')).slice(0, 300);
-      throw new ProviderError(`ollama responded ${res.status}`, res.status, detail);
+  /**
+   * Waits for Ollama's response headers only. Ollama sends them after the model is loaded,
+   * so "not installed", "too large" and "not running" all surface here, before any text.
+   */
+  async chat(req: ChatRequest): Promise<AsyncIterable<ChatEvent>> {
+    let res: Response;
+    try {
+      res = await this.fetchImpl(`${this.baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          model: req.model,
+          messages: req.messages,
+          stream: true,
+          stream_options: { include_usage: true },
+          temperature: req.temperature,
+          max_tokens: req.maxTokens,
+        }),
+        signal: req.signal,
+      });
+    } catch (err) {
+      if (req.signal?.aborted) throw err; // the caller cancelled; not Ollama's fault
+      throw classifyFetchFailure(err);
     }
 
+    if (!res.ok || !res.body) {
+      const body = await res.text().catch(() => '');
+      throw classifyHttpFailure(res.status, body, req.model);
+    }
+    return this.stream(res.body, req.signal);
+  }
+
+  private async *stream(body: ReadableStream<Uint8Array>, signal?: AbortSignal): AsyncGenerator<ChatEvent> {
     const decoder = new TextDecoder();
     let buf = '';
     let finished = false;
-    for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
-      buf += decoder.decode(chunk, { stream: true });
-      let nl: number;
-      while ((nl = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, nl);
-        buf = buf.slice(nl + 1);
-        for (const ev of parseSseLine(line)) {
-          if (ev.type === 'done') finished = true;
-          yield ev;
+    try {
+      for await (const chunk of body as unknown as AsyncIterable<Uint8Array>) {
+        buf += decoder.decode(chunk, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          for (const ev of parseSseLine(line)) {
+            if (ev.type === 'done') finished = true;
+            yield ev;
+          }
         }
       }
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      throw classifyStreamFailure(err);
     }
     for (const ev of parseSseLine(buf)) {
       if (ev.type === 'done') finished = true;

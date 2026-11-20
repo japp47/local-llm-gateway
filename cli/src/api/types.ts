@@ -136,6 +136,8 @@ export interface StreamHandlers {
 export interface StreamError {
   code: string;
   message: string;
+  /** What to do about it, when the gateway knows (newer gateways only). */
+  hint?: string;
 }
 
 export interface StreamResult {
@@ -157,4 +159,11 @@ export interface ApiClientConfig {
 export interface CurrentUser {
   id: string;
   email: string;
+}
+export interface BackupSummary {
+  file: string;
+  conversations: number;
+  messages: number;
+  bytes: number;
+  createdAt: string;
 }

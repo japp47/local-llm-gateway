@@ -1,9 +1,17 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { buildOpenApi } from '../api/openapi.js';
 import { ollamaReady } from '../lib/ollama.js';
 import type { Deps } from '../app.js';
 
 export const healthRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps }) => {
-  app.get('/healthz', async () => ({ ok: true }));
+  // `mode` lets the CLI explain a rejected key: both modes usually listen on the same port.
+  // It reveals nothing secret: no paths, versions or URLs.
+  app.get('/healthz', async () => ({ ok: true, mode: deps.config.mode }));
+
+  // The API description, generated from the same schemas the routes validate with. Public:
+  // it describes the shape of the API, not anyone's data.
+  let openapi: unknown;
+  app.get('/openapi.json', async () => (openapi ??= buildOpenApi()));
 
   app.get('/readyz', async (_req, reply) => {
     const [ollama, db] = await Promise.all([

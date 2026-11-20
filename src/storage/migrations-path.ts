@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,4 +15,12 @@ export function migrationsFolder(sub: '' | 'sqlite'): string {
     if (parent === dir) throw new Error(`migrations folder drizzle/${sub} not found`);
     dir = parent;
   }
+}
+
+/** Number of migrations this build ships (entries in Drizzle's journal). */
+export function availableMigrations(sub: '' | 'sqlite'): number {
+  const journal = JSON.parse(readFileSync(join(migrationsFolder(sub), 'meta', '_journal.json'), 'utf8')) as {
+    entries?: unknown[];
+  };
+  return journal.entries?.length ?? 0;
 }

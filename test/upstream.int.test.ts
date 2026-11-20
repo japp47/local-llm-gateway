@@ -15,7 +15,7 @@ const usage = (p: number, c: number) => sseData({ choices: [], usage: { prompt_t
 class FakeOllama {
   server!: Server;
   url = '';
-  mode: 'normal' | 'split' | 'error' | 'slow' = 'normal';
+  mode: 'normal' | 'split' | 'error' | 'slow' | 'missing' | 'oom' | 'drop' = 'normal';
   requests: unknown[] = [];
   upstreamClosed = false;
 
@@ -40,6 +40,20 @@ class FakeOllama {
       res.writeHead(500, { 'content-type': 'application/json' }).end('{"error":"model crashed"}');
       return;
     }
+    if (this.mode === 'missing') {
+      // Ollama 0.35's exact answer for a model that was never pulled
+      res.writeHead(404, { 'content-type': 'application/json' }).end(
+        `{"error":{"message":"model '${body.model}' not found","type":"not_found_error","param":null,"code":null}}`,
+      );
+      return;
+    }
+    if (this.mode === 'oom') {
+      // Ollama refuses to load before trying, when its memory check fails
+      res.writeHead(500, { 'content-type': 'application/json' }).end(
+        '{"error":{"message":"model requires more system memory (17.5 GiB) than is available (9.8 GiB)","type":"api_error","param":null,"code":null}}',
+      );
+      return;
+    }
     if (!body.stream) {
       res.writeHead(200, { 'content-type': 'application/json' }).end(
         JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Hi there' } }], usage: { prompt_tokens: 7, completion_tokens: 3 } }),
@@ -47,6 +61,13 @@ class FakeOllama {
       return;
     }
     res.writeHead(200, { 'content-type': 'text/event-stream' });
+    if (this.mode === 'drop') {
+      // the model process dies mid-answer: the connection breaks without a clean end
+      res.write(delta('Half an'));
+      await new Promise((r) => setTimeout(r, 20));
+      res.destroy();
+      return;
+    }
     if (this.mode === 'slow') {
       for (let i = 0; i < 100 && !res.destroyed; i++) {
         res.write(delta(`tok${i} `));
@@ -110,19 +131,61 @@ describe('against a fake Ollama upstream', () => {
     expect(events.find((e) => e.event === 'meta')!.data.promptTokens).toBe(11);
   });
 
-  it('reports an upstream failure without persisting an assistant message', async () => {
-    ollama.mode = 'error';
+  /** A refusal before streaming is a plain HTTP error, and nothing is saved, so a retry is clean. */
+  async function expectCleanRefusal(status: number, code: string, hint?: string) {
     const a = await t.addUser('a@example.com');
     const conv = await newConv(a.headers);
     const res = await sendMsg(a.headers, conv.id);
 
+    expect(res.statusCode).toBe(status);
+    expect(res.headers['content-type']).toContain('application/json');
+    expect(res.json().error).toMatchObject({ code, ...(hint ? { hint } : {}) });
+    expect((await t.deps.repos.messages.listPage(conv.id)).rows).toEqual([]);
+    expect(await t.deps.repos.generations.listByUser(a.userId)).toEqual([]);
+    expect(t.deps.limiter.inFlight).toBe(0);
+    return { a, conv, res };
+  }
+
+  it('reports an upstream failure before streaming as an HTTP error, saving nothing', async () => {
+    ollama.mode = 'error';
+    const { res } = await expectCleanRefusal(502, 'provider_error');
+    expect(res.json().error.message).not.toContain('model crashed'); // details stay in the log
+  });
+
+  it('explains a model that was never downloaded, with the pull command', async () => {
+    ollama.mode = 'missing';
+    await expectCleanRefusal(400, 'model_not_installed', 'Run: ollama pull fake-model');
+  });
+
+  it("explains that a model doesn't fit in memory", async () => {
+    ollama.mode = 'oom';
+    await expectCleanRefusal(503, 'model_too_large');
+  });
+
+  it('says Ollama is not running when nothing listens on its port', async () => {
+    await ollama.stop();
+    const { a, conv } = await expectCleanRefusal(503, 'ollama_unavailable');
+    // the lease was released: a retry gets the same clean answer, not "conversation busy"
+    expect((await sendMsg(a.headers, conv.id)).json().error.code).toBe('ollama_unavailable');
+  });
+
+  it('saves the partial answer and says the model stopped when the stream breaks', async () => {
+    ollama.mode = 'drop';
+    const a = await t.addUser('a@example.com');
+    const conv = await newConv(a.headers);
+    const res = await sendMsg(a.headers, conv.id);
+
+    expect(res.statusCode).toBe(200);
     const events = parseSse(res.payload);
-    expect(events.some((e) => e.event === 'error')).toBe(true);
-    expect(events.at(-1)!.data).toMatchObject({ type: 'done', status: 'error', assistantMessageId: null });
-    const rows = await t.deps.repos.generations.listByUser(a.userId);
-    expect(rows[0]).toMatchObject({ status: 'error', errorCode: 'provider_error', messageId: null });
+    expect(events.find((e) => e.event === 'error')!.data).toMatchObject({
+      code: 'model_stopped',
+      message: 'The model stopped unexpectedly.',
+    });
+    expect(events.at(-1)!.data).toMatchObject({ type: 'done', status: 'partial' });
     const msgs = (await t.deps.repos.messages.listPage(conv.id)).rows;
-    expect(msgs.map((m) => m.role)).toEqual(['user']);
+    expect(msgs.map((m) => [m.role, m.status])).toEqual([['user', 'complete'], ['assistant', 'partial']]);
+    const rows = await t.deps.repos.generations.listByUser(a.userId);
+    expect(rows[0]).toMatchObject({ status: 'partial', errorCode: 'model_stopped' });
   });
 
   it('legacy /v1/chat/completions still works (stream and non-stream)', async () => {

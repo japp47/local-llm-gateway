@@ -15,6 +15,7 @@ import type {
   StreamResult,
   Transcript,
   TranscriptPage,
+  BackupSummary,
   CurrentUser,
 } from './types.js';
 
@@ -57,7 +58,7 @@ export class ApiClient {
     } catch (error) {
       if (isAbort(error)) throw error;
       throw new ConnectionError(
-        `Cannot reach the gateway at ${this.cfg.baseUrl}. Is it running? (npm run dev)`,
+        `The assistant isn't running at ${this.cfg.baseUrl}.\n  → Start it with: npm start (in the gateway folder)`,
       );
     }
     if (!response.ok) throw await toApiError(response);
@@ -124,6 +125,11 @@ export class ApiClient {
 
   me() {
     return this.json<CurrentUser>('GET', '/v1/me');
+  }
+
+  /** Asks the gateway to write a checked backup into its data folder. Single-user mode. */
+  backup() {
+    return this.json<BackupSummary>('POST', '/v1/backup');
   }
   
   models() {

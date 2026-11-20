@@ -1,5 +1,5 @@
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { migrationsFolder } from '../migrations-path.js';
+import { availableMigrations, migrationsFolder } from '../migrations-path.js';
 import type { Storage } from '../ports.js';
 import { openSqlite, type SqliteDb } from './client.js';
 import { SqliteConversationsStore } from './conversations.js';
@@ -31,6 +31,19 @@ export function createSqliteStorage(path: string): SqliteStorage {
       }
     },
     migrate: async () => migrate(db, { migrationsFolder: migrationsFolder('sqlite') }),
+    // SQLite's online backup API: copies pages while the gateway keeps serving.
+    backup: async (dest) => {
+      await sqlite.backup(dest);
+    },
+    migrationStatus: async () => {
+      let applied = 0;
+      try {
+        applied = (sqlite.prepare('select count(*) as n from __drizzle_migrations').get() as { n: number }).n;
+      } catch {
+        // no migrations table yet: nothing applied
+      }
+      return { applied, available: availableMigrations('sqlite') };
+    },
     close: async () => {
       sqlite.close();
     },

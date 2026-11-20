@@ -118,10 +118,56 @@ describe('ApiClient', () => {
     expect(describeError(err)).toMatch(/still generating/);
   });
 
+  it('backup posts to /v1/backup and returns where the file went', async () => {
+    let seen = '';
+    handler = (req, res) => {
+      seen = `${req.method} ${req.url}`;
+      res.writeHead(201, { 'content-type': 'application/json' }).end(
+        '{"file":"/d/backups/gateway-20261120-193005.db","conversations":2,"messages":4,"bytes":4096,"createdAt":"x"}',
+      );
+    };
+    expect(await client().backup()).toMatchObject({ conversations: 2, file: '/d/backups/gateway-20261120-193005.db' });
+    expect(seen).toBe('POST /v1/backup');
+  });
+
+  it('backup in server mode shows the Postgres hint', async () => {
+    handler = (_req, res) => {
+      res.writeHead(409, { 'content-type': 'application/json' }).end(
+        '{"error":{"code":"backup_failed","message":"This gateway uses a shared Postgres database.","hint":"Run: pg_dump ..."}}',
+      );
+    };
+    const err = await client().backup().catch((e) => e);
+    expect(describeError(err)).toBe('This gateway uses a shared Postgres database.\n  → Run: pg_dump ...');
+  });
+
   it('raises a ConnectionError with a hint when the gateway is down', async () => {
     const dead = new ApiClient({ baseUrl: 'http://127.0.0.1:1', apiKey: 'k' });
     const err = await dead.models().catch((e) => e);
     expect(err).toBeInstanceOf(ConnectionError);
-    expect(describeError(err)).toMatch(/Cannot reach the gateway/);
+    expect(describeError(err)).toMatch(/The assistant isn't running at http:\/\/127\.0\.0\.1:1\.\n.*npm start/);
+  });
+
+  it("shows the gateway's plain message and hint instead of a bare code", async () => {
+    handler = (_req, res) => {
+      res.writeHead(503, { 'content-type': 'application/json' }).end(
+        '{"error":{"code":"ollama_unavailable","message":"Ollama isn\'t running.","hint":"Open the Ollama app (or run: ollama serve), then try again.","request_id":"req_2"}}',
+      );
+    };
+    const err = await client().streamMessage('c', { content: 'hi' }).catch((e) => e);
+    expect(err).toMatchObject({ code: 'ollama_unavailable', hint: 'Open the Ollama app (or run: ollama serve), then try again.' });
+    expect(describeError(err)).toBe("Ollama isn't running.\n  → Open the Ollama app (or run: ollama serve), then try again.");
+  });
+
+  it('reads the hint from an error event in the stream, and tolerates its absence', async () => {
+    handler = (_req, res) => {
+      res.writeHead(200, { 'content-type': 'text/event-stream' });
+      res.end(
+        frame('delta', { text: 'Half' }) +
+          frame('error', { code: 'model_stopped', message: 'The model stopped unexpectedly.', hint: 'Try again.' }) +
+          frame('done', { status: 'partial', assistantMessageId: 'm1' }),
+      );
+    };
+    const r = await client().streamMessage('c', { content: 'hi' });
+    expect(r.error).toEqual({ code: 'model_stopped', message: 'The model stopped unexpectedly.', hint: 'Try again.' });
   });
 });

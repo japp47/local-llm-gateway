@@ -83,11 +83,13 @@ export function configShowCommand(): void {
   const from = (k: ConfigKey, name: string) => (c.overrides?.includes(k) ? out.dim(`  (from ${name})`) : '');
   console.log(`profile  ${c.currentProfile ?? '(none)'}`);
   console.log(`baseUrl  ${c.baseUrl}${from('baseUrl', 'LLM_BASE_URL')}`);
-  console.log(`apiKey   ${maskKey(c.apiKey)}${from('apiKey', 'LLM_API_KEY')}`);
+  const localKey = c.keySource === 'local-gateway' ? out.dim('  (from the gateway on this computer)') : '';
+  console.log(`apiKey   ${maskKey(c.apiKey)}${from('apiKey', 'LLM_API_KEY')}${localKey}`);
   console.log(`model    ${c.model ?? '(server default)'}${from('model', 'LLM_MODEL')}`);
   console.log(out.dim(`file     ${configPath()}  (env LLM_BASE_URL / LLM_API_KEY / LLM_MODEL override it)`));
   if (c.keyWithheldFor) console.log(out.dim('note     the saved key is not used because LLM_BASE_URL points to a different gateway'));
   if (c.profileProblem) console.log(out.dim(`note     ${c.profileProblem}`));
+  if (c.localKeyIgnored) console.log(out.dim(`note     ${c.localKeyIgnored}`));
 }
 
 export function configPathCommand(): void {

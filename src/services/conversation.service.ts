@@ -3,9 +3,11 @@ import { AppError } from '../lib/errors.js';
 import { QueueFullError, type Semaphore } from '../lib/semaphore.js';
 import type { TokenCounter } from '../lib/tokens.js';
 import type { Metrics } from '../plugins/metrics.js';
-import { ProviderError, type ChatMessage, type LLMProvider } from '../providers/types.js';
+import { ProviderError, type ChatEvent, type ChatMessage, type LLMProvider } from '../providers/types.js';
 import type { ConversationsStore, GenerationsStore, MessagesStore } from '../storage/index.js';
 import { buildContext, ContextTooLargeError } from './context-builder.js';
+import type { ModelsService } from './models.service.js';
+import { fromProviderError } from './provider-errors.js';
 
 export interface StartInfo {
   requestId: string;
@@ -16,7 +18,7 @@ export interface StartInfo {
 
 export type ServerEvent =
   | { type: 'delta'; text: string }
-  | { type: 'error'; code: string; message: string }
+  | { type: 'error'; code: string; message: string; hint?: string }
   | {
       type: 'meta';
       provider: string;
@@ -54,12 +56,15 @@ export interface SendParams {
 export interface ConversationServiceDeps {
   config: config;
   provider: LLMProvider;
+  models: ModelsService;
   limiter: Semaphore;
   metrics: Metrics;
   counter: TokenCounter;
   conversations: ConversationsStore;
   messages: MessagesStore;
   generations: GenerationsStore;
+  /** Called after each complete answer; used to check how the model fits in memory. */
+  onAnswered?: (model: string) => void;
 }
 
 export class ConversationService {
@@ -73,14 +78,18 @@ export class ConversationService {
     if (!conv) throw new AppError(404, 'conversation_not_found', 'conversation not found');
 
     const model = p.model ?? conv.defaultModel;
-    if (!config.allowedModels.has(model)) {
-      throw new AppError(400, 'model_not_allowed', `model not allowed: ${model}`);
-    }
+    await this.d.models.check(model);
 
     // One in-flight generation per conversation (lease survives crashes by expiring).
     if (!(await this.d.conversations.acquireLease(conv.id, config.LEASE_SECONDS))) {
       throw new AppError(409, 'conversation_busy', 'a generation is already running here');
     }
+
+    // The provider gets its own signal: cancelled when the client goes away, and also when this
+    // request ends for any other reason, so an opened Ollama stream is never left running.
+    const upstream = new AbortController();
+    const cancelUpstream = () => upstream.abort();
+    p.signal.addEventListener('abort', cancelUpstream, { once: true });
 
     let releaseSlot: (() => void) | undefined;
     try {
@@ -111,6 +120,12 @@ export class ConversationService {
       releaseSlot = await this.acquireSlot(p.signal);
       const queueWaitMs = Math.round(performance.now() - queueStart);
 
+      // Open the provider stream before saving anything or replying 200. It waits only for
+      // Ollama's headers (sent once the model is loaded), so a stopped Ollama or a missing
+      // model becomes a clean HTTP error with nothing saved, and a retry starts fresh.
+      const started = performance.now();
+      const stream = await this.open(model, ctx.messages, p, upstream.signal);
+
       const userMsg = await this.d.messages.add({
         conversationId: conv.id,
         role: 'user',
@@ -124,7 +139,7 @@ export class ConversationService {
       });
 
       // ---- generation ----
-      const started = performance.now();
+      // TTFT counts from opening the stream, so it includes loading the model.
       let text = '';
       let ttftMs: number | null = null;
       let usage: { promptTokens: number; completionTokens: number } | undefined;
@@ -132,12 +147,7 @@ export class ConversationService {
       let errorCode: string | null = null;
 
       try {
-        for await (const ev of this.d.provider.chat({
-          model,
-          messages: ctx.messages,
-          temperature: p.temperature,
-          signal: p.signal,
-        })) {
+        for await (const ev of stream) {
           if (ev.type === 'delta') {
             if (ttftMs === null) {
               ttftMs = Math.round(performance.now() - started);
@@ -150,15 +160,17 @@ export class ConversationService {
           }
         }
       } catch (err) {
-        errorCode = p.signal.aborted
-          ? 'aborted'
-          : err instanceof ProviderError
-            ? 'provider_error'
-            : 'internal_error';
+        const known = err instanceof ProviderError ? err : null;
+        errorCode = p.signal.aborted ? 'aborted' : (known?.code ?? 'internal_error');
         status = text ? 'partial' : 'error';
-        p.log.warn({ err: (err as Error).message, errorCode }, 'generation failed');
+        p.log.warn({ err: (err as Error).message, detail: known?.detail, errorCode }, 'generation failed');
         if (errorCode !== 'aborted') {
-          await sink.event({ type: 'error', code: errorCode, message: 'generation failed' });
+          await sink.event({
+            type: 'error',
+            code: errorCode,
+            message: known?.message ?? 'Something went wrong while answering.',
+            ...(known?.hint ? { hint: known.hint } : {}),
+          });
         }
       }
 
@@ -224,9 +236,29 @@ export class ConversationService {
         droppedMessages: ctx.droppedMessages,
       });
       await sink.event({ type: 'done', assistantMessageId: assistantMsg?.id ?? null, status });
+      if (status === 'complete') this.d.onAnswered?.(model);
     } finally {
+      p.signal.removeEventListener('abort', cancelUpstream);
+      upstream.abort(); // no-op once the stream was fully read
       releaseSlot?.();
       await this.d.conversations.releaseLease(conv.id).catch(() => {});
+    }
+  }
+
+  private async open(
+    model: string,
+    messages: ChatMessage[],
+    p: SendParams,
+    signal: AbortSignal,
+  ): Promise<AsyncIterable<ChatEvent>> {
+    try {
+      return await this.d.provider.chat({ model, messages, temperature: p.temperature, signal });
+    } catch (err) {
+      if (p.signal.aborted) throw new AppError(504, 'cancelled', 'request cancelled or timed out');
+      if (!(err instanceof ProviderError)) throw err;
+      p.log.warn({ errorCode: err.code, detail: err.detail }, 'provider refused the request');
+      this.d.metrics.rejected.inc({ reason: err.code });
+      throw fromProviderError(err);
     }
   }
 
@@ -236,7 +268,10 @@ export class ConversationService {
     } catch (err) {
       if (err instanceof QueueFullError) {
         this.d.metrics.rejected.inc({ reason: 'queue_full' });
-        throw new AppError(503, 'server_busy', 'server busy, retry later', { 'retry-after': '5' });
+        throw new AppError(503, 'server_busy', 'The assistant is busy with other questions.', {
+          headers: { 'retry-after': '5' },
+          hint: 'Try again in a few seconds.',
+        });
       }
       throw new AppError(504, 'cancelled', 'request cancelled or timed out while queued');
     }

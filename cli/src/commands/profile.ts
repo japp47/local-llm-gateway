@@ -10,6 +10,7 @@ import {
 } from '../config.js';
 import { CliError } from '../errors.js';
 import { out } from '../format.js';
+import { localCredentialsPath, readLocalCredentials } from '../local-credentials.js';
 import { DEFAULT_BASE_URL } from '../utils/constants.js';
 import { readSecretFromStdin, promptSecret } from '../utils/secret.js';
 import { getClient } from './shared.js';
@@ -55,11 +56,17 @@ export async function profileAddCommand(
     apiKeyStdin?: boolean;
     baseUrl?: string;
     model?: string;
+    local?: boolean;
   },
 ): Promise<void> {
   validateProfileName(name);
+  if (opts.local && (opts.apiKey || opts.apiKeyStdin)) {
+    throw new CliError('--local uses the gateway\'s own key, so don\'t pass a key with it.');
+  }
 
-  const apiKey = await resolveApiKeyInput(opts);
+  // --local saves no key: the CLI reads the single-user gateway's own key each time, so the
+  // profile keeps working even if the gateway issues a new one.
+  const apiKey = opts.local ? undefined : await resolveApiKeyInput(opts);
 
   // A new profile never inherits the URL of whatever is active or set in the
   // environment: that would silently pair this key with the wrong server.
@@ -67,7 +74,10 @@ export async function profileAddCommand(
 
   const result = addProfile(name, { apiKey, baseUrl, model: opts.model });
 
-  console.log(`Profile "${name}" added for ${baseUrl}.`);
+  console.log(`Profile "${name}" added for ${baseUrl}${opts.local ? ', using the single-user gateway\'s own key' : ''}.`);
+  if (opts.local && readLocalCredentials(localCredentialsPath()).kind !== 'found') {
+    console.log(out.dim('No single-user gateway key yet: start it once with npm run dev:single (or npm start without DATABASE_URL).'));
+  }
   if (result.migrated) {
     console.log(
       out.dim('Your earlier settings were kept as a profile named "default" (still active).'),
@@ -98,9 +108,8 @@ export function profileListCommand(): void {
 
   for (const p of profiles) {
     const marker = p.active ? '*' : ' ';
-    console.log(
-      `${marker} ${p.name}  ${p.profile.baseUrl}  ${maskKey(p.profile.apiKey)}`,
-    );
+    const key = p.profile.apiKey ? maskKey(p.profile.apiKey) : "(the single-user gateway's own key)";
+    console.log(`${marker} ${p.name}  ${p.profile.baseUrl}  ${key}`);
   }
 }
 

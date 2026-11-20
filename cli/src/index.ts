@@ -3,7 +3,10 @@ import { Command } from 'commander';
 import { chatCommand, resumeCommand } from './commands/chat.js';
 import { forkCommand, lsCommand, renameCommand, rmCommand, showCommand } from './commands/conversations.js';
 import { configPathCommand, configSetCommand, configShowCommand, modelsCommand, statsCommand } from './commands/info.js';
-import { CliError, describeError } from './errors.js';
+import { backupCommand, restoreCommand } from './commands/backup.js';
+import { doctorCommand } from './commands/doctor.js';
+import { CliError } from './errors.js';
+import { describeErrorFully } from './key-diagnosis.js';
 import { errc } from './format.js';
 import {
   profileAddCommand,
@@ -21,7 +24,7 @@ const wrap =
     try {
       await fn(...args);
     } catch (e) {
-      console.error(errc.red(describeError(e)));
+      console.error(errc.red(await describeErrorFully(e)));
       process.exitCode = e instanceof CliError ? e.exitCode : 1;
     }
   };
@@ -94,6 +97,24 @@ program
   .option('--json', 'machine-readable output')
   .action(wrap(statsCommand));
 
+program
+  .command('backup')
+  .description('save a copy of all your conversations (single-user mode)')
+  .option('--json', 'machine-readable output')
+  .action(wrap(backupCommand));
+
+program
+  .command('restore')
+  .description('how to put a backup back (the assistant must be stopped)')
+  .argument('<file>', 'a backup made by llm backup')
+  .action(wrap(restoreCommand));
+
+program
+  .command('doctor')
+  .description('check everything the assistant needs, and say how to fix what is wrong')
+  .option('--json', 'machine-readable output')
+  .action(wrap(doctorCommand));
+
 const profile = program
   .command('profile')
   .description('manage gateway profiles');
@@ -105,6 +126,7 @@ profile
   .option('--api-key-stdin', 'read the API key from stdin')
   .option('--base-url <url>', 'gateway base URL (default: http://localhost:3000)')
   .option('--model <name>', 'default CLI model')
+  .option('--local', "save no key: always use the single-user gateway's own key (npm run dev:single / npm start)")
   .action(wrap(profileAddCommand));
 
 profile

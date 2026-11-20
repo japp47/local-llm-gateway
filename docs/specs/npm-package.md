@@ -1,6 +1,7 @@
 # Spec: install and run without cloning (npm package)
 
-Status: built 2026-11-20 (not yet published). Decided by the owner: one package, name
+Status: published 2026-11-20 as local-llm-gateway@0.1.0 (verified: installed from the
+registry into an empty folder, `llm start`, zero-config key, a real chat answer). Decided by the owner: one package, name
 `local-llm-gateway`, commands `llm` and `llm-gateway` (keeping `llm` despite the clash with
 the Python tool), MIT license, the owner publishes. Step 1 of "Next up" in the roadmap (Phase 1).
 
@@ -12,7 +13,7 @@ no-terminal Mac app comes later and will wrap the same package.
 
 ## What the user does (target)
 ```bash
-npm install -g local-llm-gateway     # or, to try it: npx local-llm-gateway
+npm install -g local-llm-gateway     # or, to try it: npx -p local-llm-gateway llm start
 llm start                            # starts the assistant (single-user mode, no setup)
 llm chat "hello"                     # in another window
 ```
@@ -65,3 +66,11 @@ today. Server mode works by setting the same environment variables (`DATABASE_UR
   avoids this by bundling Node.
 - Installing `-g` in a second macOS account may hit the Homebrew permissions problem noted
   in the gate walk. `npx` avoids it for trying out.
+
+## Follow-ups found after publishing
+- Plain `npx local-llm-gateway` fails ("could not determine executable to run"): the package
+  has two commands and neither is named after it. Fix in 0.1.1: add a `local-llm-gateway`
+  command that starts the assistant. Until then: `npx -p local-llm-gateway llm start`.
+- npm warns that `prom-client` is deprecated (replaced by `@prometheus-io/client`).
+- First publish of a new name goes through npm's staged publishing: a public placeholder
+  `0.0.0-stage` appears first, the real version a few minutes later.

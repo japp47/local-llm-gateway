@@ -30,7 +30,7 @@ describe('explaining a rejected key', () => {
       local: localKey(),
       fetchImpl,
     });
-    expect(msg).toContain('The key in profile "storageTest" isn\'t accepted by the single-user gateway (npm run dev:single, SQLite)');
+    expect(msg).toContain('The key in profile "storageTest" isn\'t accepted by the single-user assistant (SQLite)');
     expect(msg).toContain('llm profile add local --local  then  llm profile use local');
   });
 
@@ -58,7 +58,7 @@ describe('explaining a rejected key', () => {
       local: localKey(),
       fetchImpl,
     });
-    expect(msg).toContain('the server-mode gateway (npm run dev, Postgres)');
+    expect(msg).toContain('the server-mode gateway (Postgres)');
     expect(msg).toContain('→ Switch to a profile that works with it: llm profile use default');
     expect(msg).toContain('(these work too: work)');
     expect(msg).not.toContain('old');
@@ -80,7 +80,7 @@ describe('explaining a rejected key', () => {
     const { fetchImpl } = gateway('single', []);
     const config: CliConfig = { baseUrl: URL_, apiKey: 'k-x', currentProfile: 'p' };
     const msg = await explainRejectedKey({ config, profiles: [], local: noLocal, fetchImpl });
-    expect(msg).toContain('Start that instead: npm run dev');
+    expect(msg).toContain('Start that instead');
   });
 
   it('an older gateway without a mode still gets a useful next step', async () => {

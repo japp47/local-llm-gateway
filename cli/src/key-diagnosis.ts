@@ -1,8 +1,8 @@
 // Explains a rejected API key in terms of what is actually running.
 //
-// The usual cause on one machine: single-user mode (npm run dev:single, SQLite) and server
-// mode (npm run dev, Postgres) both listen on localhost:3000 but have separate databases, so
-// a key made for one is unknown to the other. We ask the gateway which mode it runs in, and
+// The usual cause on one machine: single-user mode (SQLite) and server mode (Postgres) both
+// listen on localhost:3000 but have separate databases, so a key made for one is unknown
+// to the other. We ask the gateway which mode it runs in, and
 // try the other keys saved for this same URL to name the profile that works.
 //
 // Safety rule kept: a saved key is only ever sent to the URL it was saved for.
@@ -28,8 +28,8 @@ export interface DiagnosisInput {
 }
 
 const MODE_LABEL: Record<GatewayMode, string> = {
-  single: 'the single-user gateway (npm run dev:single, SQLite)',
-  server: 'the server-mode gateway (npm run dev, Postgres)',
+  single: 'the single-user assistant (SQLite)',
+  server: 'the server-mode gateway (Postgres)',
 };
 
 /** Older gateways don't report a mode; that is fine, the advice is just less specific. */
@@ -108,10 +108,10 @@ export async function explainRejectedKey(input: DiagnosisInput): Promise<string>
         : "→ Use the gateway's own key: llm profile add local --local  then  llm profile use local",
     );
   } else if (mode === 'single') {
-    lines.push('→ This key is probably for server mode. Start that instead: npm run dev');
+    lines.push('→ This key is probably for a server-mode gateway (npm run dev in the repo, or llm start --env-file .env). Start that instead, or use a profile for this assistant.');
   } else if (mode === 'server') {
     lines.push(
-      '→ If you meant the single-user gateway, start it instead: npm run dev:single',
+      '→ If you meant the single-user assistant, stop this one and start that: llm start (without DATABASE_URL)',
       '  Otherwise make a key on the server: npm run key:create -- you@example.com  then  llm config set apiKey',
     );
   } else {

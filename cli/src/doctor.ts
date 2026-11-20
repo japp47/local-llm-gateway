@@ -5,6 +5,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CliConfig, CliProfile } from './config.js';
+import { startHint } from './gateway-files.js';
 import { explainRejectedKey, type GatewayMode } from './key-diagnosis.js';
 import type { LocalCredentialsResult } from './local-credentials.js';
 
@@ -64,7 +65,7 @@ function configCheck(c: CliConfig): Check {
       id,
       status: 'fail',
       message: 'No API key is set up.',
-      hint: 'Start the assistant on this computer once (npm start); the CLI then finds its key by itself. For a shared gateway: llm profile add <name>',
+      hint: `Start the assistant on this computer once (${startHint()}); the CLI then finds its key by itself. For a shared gateway: llm profile add <name>`,
     };
   }
   const source = c.overrides?.includes('apiKey')
@@ -147,7 +148,7 @@ export async function runDoctor(input: DoctorInput): Promise<Check[]> {
       id: 'gateway',
       status: 'fail',
       message: `Another program is answering at ${c.baseUrl}, not the assistant.`,
-      hint: 'Stop that program, or start the assistant on a free port (PORT=3001 npm start) and point the CLI there.',
+      hint: `Stop that program, or start the assistant on a free port (PORT=3001 ${startHint()}) and point the CLI there.`,
     });
   } else if (probe.kind === 'down') {
     const note = local ? lockNote(input.dataDir, c.baseUrl, isAlive) : '';
@@ -155,7 +156,7 @@ export async function runDoctor(input: DoctorInput): Promise<Check[]> {
       id: 'gateway',
       status: 'fail',
       message: `The assistant isn't running at ${c.baseUrl}.${note}`,
-      hint: local ? 'Start it with: npm start  (or npm run dev:single / npm run dev while developing)' : 'Ask whoever runs that gateway to start it.',
+      hint: local ? `Start it with: ${startHint()}` : 'Ask whoever runs that gateway to start it.',
     });
     // The gateway can't check Ollama for us, so check it from here (same machine only).
     if (local) checks.push(...(await directOllamaCheck(input.ollamaUrl, fetchImpl, timeoutMs)));

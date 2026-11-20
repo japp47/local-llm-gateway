@@ -1,6 +1,7 @@
 import { ApiClient } from '../api.js';
 import { loadConfig } from '../config.js';
 import { CliError } from '../errors.js';
+import { startHint } from '../gateway-files.js';
 
 export function getClient(): ApiClient {
   const cfg = loadConfig();
@@ -19,7 +20,7 @@ export function getClient(): ApiClient {
     if (cfg.localKeyIgnored) throw new CliError(cfg.localKeyIgnored);
     throw new CliError(
       'No API key configured.\n' +
-        `- Gateway on this computer: start it once (npm start); it creates a key the CLI finds by itself.\n` +
+        `- Gateway on this computer: start it once (${startHint()}); it creates a key the CLI finds by itself.\n` +
         '- Shared gateway: ask for a key (npm run key:create -- you@example.com on that server),\n' +
         '  then run: llm profile add <name>   (you will be asked for the key)',
     );

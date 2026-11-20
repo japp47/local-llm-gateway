@@ -10,6 +10,7 @@ import {
 } from '../config.js';
 import { CliError } from '../errors.js';
 import { out } from '../format.js';
+import { startHint } from '../gateway-files.js';
 import { localCredentialsPath, readLocalCredentials } from '../local-credentials.js';
 import { DEFAULT_BASE_URL } from '../utils/constants.js';
 import { readSecretFromStdin, promptSecret } from '../utils/secret.js';
@@ -76,7 +77,7 @@ export async function profileAddCommand(
 
   console.log(`Profile "${name}" added for ${baseUrl}${opts.local ? ', using the single-user gateway\'s own key' : ''}.`);
   if (opts.local && readLocalCredentials(localCredentialsPath()).kind !== 'found') {
-    console.log(out.dim('No single-user gateway key yet: start it once with npm run dev:single (or npm start without DATABASE_URL).'));
+    console.log(out.dim(`No single-user gateway key yet: start the assistant once (${startHint()}).`));
   }
   if (result.migrated) {
     console.log(

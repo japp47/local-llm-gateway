@@ -59,3 +59,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:int:sqlite
+  # The npm package as a stranger gets it: pack, install into an empty folder, start, check.
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: cli
+      - run: bash scripts/pack-smoke.sh

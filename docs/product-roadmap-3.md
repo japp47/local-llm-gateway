@@ -307,9 +307,26 @@ macOS account; both move to the 1b installer.
   `llm doctor` reports a clear fix for "Ollama not running" and "model missing"; a backup
   restored into a fresh data folder shows the same conversations.
 
+#### Next up, in this order (agreed 2026-11-20)
+
+None of these depend on the wedge decision, so they don't wait for it:
+
+1. **npm package**: install and run without cloning (`npx`, `llm start`). Spec:
+   `docs/specs/npm-package.md`.
+2. **Web chat page** served by the gateway (the 1b chat window, built first in the browser).
+   Every wedge needs it: no everyday user or office worker will use a terminal.
+3. **Phone access v1** (moved up from Phase 5): a "Use from my phone" switch, off by default;
+   pairing by QR code with one revocable key per device; Tailscale for HTTPS and away from
+   home. Version 2 later: install to the home screen, "Share to my AI". Research HTTPS on a
+   home network first (see `docs/research/2026-11-20-pivot-research.md` section 2).
+4. Then the wedge-specific work: for B (offices, best supported by surveys:
+   `docs/research/2026-11-20-survey-evidence.md`), document search with sources and an audit
+   log; for A/D, the Mac installer below.
+
 #### 1b. App shell
 
-- Wait for the wedge decision (section 1a) before starting 1b.
+- Wait for the wedge decision (section 1a) before starting the installer. The web chat page
+  (item 2 above) does not wait.
 - Installer for macOS, first-run model download with progress in plain words, a simple
   chat window with saved history.
 - App shape (decided): a local web app served by the gateway, opened in the browser.
@@ -507,7 +524,7 @@ and in Private mode a test with the local model down records zero cloud requests
   privilege.
 - Household mode: each person their own history on a shared home Mac (the multi-user
   gateway already isolates users).
-- Reach your home Mac from a phone over a private link; optional encrypted backup.
+- Phone access moved up (see "Next up" in Phase 1). Still here: optional encrypted backup.
 
 ### Operate (engineering track)
 

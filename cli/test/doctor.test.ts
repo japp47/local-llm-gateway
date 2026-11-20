@@ -64,7 +64,7 @@ describe('llm doctor', () => {
   it('gateway down: says how to start it, and checks Ollama directly', async () => {
     const checks = await run({ gateway: 'down', ollama: true, models: ['llama3.2:3b', 'nomic-embed-text:latest'], validKeys: [] });
     expect(summary(checks)).toEqual(['config:ok', 'gateway:fail', 'ollama:ok', 'model:ok']);
-    expect(checks[1]!.hint).toContain('npm start');
+    expect(checks[1]!.hint).toMatch(/(llm|npm) start/);
     expect(checks[3]!.message).toBe('1 chat model downloaded (llama3.2:3b).');
   });
 

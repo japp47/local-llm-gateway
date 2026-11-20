@@ -1,5 +1,6 @@
 import { ApiError, ConnectionError, toApiError } from './errors.js';
 import { consumeStream } from './stream.js';
+import { startHint } from '../gateway-files.js';
 import type {
   ApiClientConfig,
   Conversation,
@@ -58,7 +59,7 @@ export class ApiClient {
     } catch (error) {
       if (isAbort(error)) throw error;
       throw new ConnectionError(
-        `The assistant isn't running at ${this.cfg.baseUrl}.\n  → Start it with: npm start (in the gateway folder)`,
+        `The assistant isn't running at ${this.cfg.baseUrl}.\n  → Start it with: ${startHint()}`,
       );
     }
     if (!response.ok) throw await toApiError(response);

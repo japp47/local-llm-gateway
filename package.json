@@ -1,8 +1,36 @@
 {
   "name": "local-llm-gateway",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.1.0",
+  "description": "A private AI assistant on your own computer: a gateway in front of Ollama, with the `llm` terminal app.",
+  "keywords": [
+    "ollama",
+    "llm",
+    "local-ai",
+    "private-ai",
+    "gateway",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/japp47/local-llm-gateway.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "llm": "cli/dist/index.js",
+    "llm-gateway": "dist/src/server.js"
+  },
+  "files": [
+    "dist/src",
+    "dist/scripts/restore.js",
+    "drizzle",
+    "cli/dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "test": "vitest run --exclude \"**/*.int.test.ts\"",
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
@@ -17,12 +45,10 @@
     "restore": "tsx --env-file-if-exists=.env scripts/restore.ts",
     "openapi": "tsx scripts/openapi.ts",
     "test:int:sqlite": "TEST_BACKEND=sqlite vitest run -c vitest.config.int.ts",
-    "dev:single": "DATABASE_URL= REDIS_URL= ALLOWED_MODELS= DEFAULT_MODEL= tsx watch --env-file-if-exists=.env src/server.ts"
+    "dev:single": "DATABASE_URL= REDIS_URL= ALLOWED_MODELS= DEFAULT_MODEL= tsx watch --env-file-if-exists=.env src/server.ts",
+    "prepack": "npm run build && npm --prefix cli run build",
+    "pack:smoke": "bash scripts/pack-smoke.sh"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",
     "better-sqlite3": "^13.0.3",
@@ -31,7 +57,8 @@
     "ioredis": "^6.0.0",
     "postgres": "^3.4.9",
     "prom-client": "^15.1.3",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",

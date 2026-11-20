@@ -20,6 +20,12 @@ Root (gateway):
   together) / `npm run db:migrate` (Postgres)
 - `npm run key:create -- you@example.com [label]` prints a raw API key once
 - `npm run openapi` regenerates `docs/openapi.json` (the contract test fails if it is stale)
+- npm package (`docs/specs/npm-package.md`): the root package ships the gateway AND `llm`
+  (`bin`: `llm`, `llm-gateway`; `files` allow-list; `prepack` builds both). `llm start` runs
+  the gateway next to the CLI (`cli/src/gateway-files.ts`); `llm restore <file>` runs
+  `dist/scripts/restore.js`. `npm run pack:smoke` packs, installs into a temp prefix and
+  checks start/doctor/backup/restore (CI job `package`). `cli/.npmignore` exists so the
+  built `cli/dist` is packed despite `cli/.gitignore`. Never `npm publish` without the owner.
 - `npm run restore -- <file>`: restore a single-user backup (gateway stopped; with
   `DATABASE_URL` in `.env`, prefix `DATABASE_URL=`). `llm doctor`, `llm backup`.
 
@@ -154,8 +160,9 @@ modes (`test:int` and `test:int:sqlite`); `bash scripts/e2e.sh` for anything end
 Phases:
 - 0 Stabilize: DONE (CLI credential safety, transcript paging, `/v1/stats`, integration
   tests, CI runs CLI checks).
-- 1 One-click app (IN PROGRESS: 1a DONE, gate passed 2026-11-20; next is the wedge decision
-  via the interviews, then 1b). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
+- 1 One-click app (IN PROGRESS: 1a DONE, gate passed 2026-11-20). Next, in order and not
+  waiting for the wedge: npm package, web chat page, phone access v1 (moved up from Phase 5).
+  Surveys point to wedge B (small professional firms); interviews with CAs to confirm. 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
   limiting instead of Postgres/Redis, zero-config first run, model auto-picked by RAM,
   `llm doctor` diagnostics, tested `llm backup`/`llm restore`, OpenAPI from zod schemas,
   a migration upgrade test. 1b (after the wedge decision): installer and local web chat.

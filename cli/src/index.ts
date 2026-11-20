@@ -5,6 +5,7 @@ import { forkCommand, lsCommand, renameCommand, rmCommand, showCommand } from '.
 import { configPathCommand, configSetCommand, configShowCommand, modelsCommand, statsCommand } from './commands/info.js';
 import { backupCommand, restoreCommand } from './commands/backup.js';
 import { doctorCommand } from './commands/doctor.js';
+import { startCommand } from './commands/start.js';
 import { CliError } from './errors.js';
 import { describeErrorFully } from './key-diagnosis.js';
 import { errc } from './format.js';
@@ -98,6 +99,12 @@ program
   .action(wrap(statsCommand));
 
 program
+  .command('start')
+  .description('start the assistant in this window (Ctrl+C stops it)')
+  .option('--env-file <path>', 'read settings from this file (for example server mode: DATABASE_URL, REDIS_URL)')
+  .action(wrap(startCommand));
+
+program
   .command('backup')
   .description('save a copy of all your conversations (single-user mode)')
   .option('--json', 'machine-readable output')
@@ -105,7 +112,7 @@ program
 
 program
   .command('restore')
-  .description('how to put a backup back (the assistant must be stopped)')
+  .description('put a backup back (stop the assistant first; your current chats are kept aside)')
   .argument('<file>', 'a backup made by llm backup')
   .action(wrap(restoreCommand));
 
@@ -126,7 +133,7 @@ profile
   .option('--api-key-stdin', 'read the API key from stdin')
   .option('--base-url <url>', 'gateway base URL (default: http://localhost:3000)')
   .option('--model <name>', 'default CLI model')
-  .option('--local', "save no key: always use the single-user gateway's own key (npm run dev:single / npm start)")
+  .option('--local', "save no key: always use the single-user gateway's own key (llm start)")
   .action(wrap(profileAddCommand));
 
 profile

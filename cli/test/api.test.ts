@@ -144,7 +144,7 @@ describe('ApiClient', () => {
     const dead = new ApiClient({ baseUrl: 'http://127.0.0.1:1', apiKey: 'k' });
     const err = await dead.models().catch((e) => e);
     expect(err).toBeInstanceOf(ConnectionError);
-    expect(describeError(err)).toMatch(/The assistant isn't running at http:\/\/127\.0\.0\.1:1\.\n.*npm start/);
+    expect(describeError(err)).toMatch(/The assistant isn't running at http:\/\/127\.0\.0\.1:1\.\n.*(llm|npm) start/);
   });
 
   it("shows the gateway's plain message and hint instead of a bare code", async () => {

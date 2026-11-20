@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { buildApp } from './app.js';
 import { createConfig } from './config.js';
 import { StartupError } from './lib/instance-lock.js';
@@ -45,8 +46,12 @@ try {
   app.log.warn({ err: (err as Error).message }, 'startup checks failed');
 }
 
+// Once only: under `llm start`, Ctrl+C arrives twice (from the terminal and forwarded by llm).
+let stopping = false;
 for (const sig of ['SIGINT', 'SIGTERM'] as const) {
   process.on(sig, async () => {
+    if (stopping) return;
+    stopping = true;
     app.log.info({ sig }, 'shutting down');
     await app.close(); // closes storage, which releases the single-user lock file
     process.exit(0);

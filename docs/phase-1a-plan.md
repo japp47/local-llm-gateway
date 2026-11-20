@@ -333,6 +333,16 @@ URLs now return the standard error shape (`not_found`).
   The gate also needs `llm doctor` to explain "Ollama not running" and "model missing", and
   a backup restored into a fresh data folder to show the same conversations.
 
+Done 2026-11-20. CI: the Postgres job became `server` with a Redis service and
+`test/redis.int.test.ts` (shared limit across instances, per-key counting, serving on with
+Redis down). README opens with the Node + Ollama quick start; roadmap and CLAUDE.md
+refreshed. **Gate walk passed** (`docs/gate-walk.md`, same-account variant: fresh clone,
+separate `DATA_DIR`, `XDG_CONFIG_HOME` and port): first answer with no key setup, answer
+within seconds; history survives a restart; `llm doctor` explained Ollama not running,
+model missing and gateway down; a backup restored into a fresh folder showed the same
+conversations. Not covered by this variant: a first model download and permissions in a
+second macOS account (`npm install -g`); both belong to the Phase 1b installer.
+
 ---
 
 ## 5. Risks and how they're covered

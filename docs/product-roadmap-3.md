@@ -101,9 +101,27 @@ before building heavily for any of them.
 
 ---
 
-## 3. Where we are (after Phase 0)
+## 3. Where we are (after Phase 1a, 2026-11-20)
 
-### Built
+### Added in Phase 1a
+- Two run modes from one codebase, chosen by configuration only: single-user (SQLite in
+  a private data folder, in-memory rate limit, no Docker) and server (Postgres + Redis).
+  One lock file per data folder; a crashed gateway's lock is taken over.
+- Zero-config first run: data folder, database, local user and key; the CLI finds the key
+  by itself and only sends it to that same local gateway.
+- Model auto-pick: installed chat models from Ollama, a default that fits half of RAM
+  (file + KV cache estimate, checked against a real measurement), curated preference list.
+- Plain-language errors with a stable `code` and an optional `hint`. Ollama is contacted
+  before anything is saved, so "not running" and "model missing" save nothing.
+- `llm doctor` (works with the gateway down), `GET /v1/doctor`, startup checks.
+- `llm backup` (SQLite online backup, checked, 0600) and `npm run restore -- <file>`
+  (gateway stopped, never deletes the replaced database).
+- OpenAPI 3.1 generated from the zod schemas (`/openapi.json`, `docs/openapi.json`),
+  with a contract test that checks real responses against it on both backends.
+- The CLI explains a rejected key (which mode is running, which profile works) and has
+  `llm profile add <name> --local`.
+
+### Built in Phase 0
 
 Gateway (Fastify, TypeScript, Postgres via Drizzle, Redis):
 - Conversations with SSE streaming: `start` -> `delta`* -> `meta` -> `done` | `error`.
@@ -137,19 +155,25 @@ Personas: one Ollama Modelfile (`Modelfiles/backend-mentor.Modelfile`): `FROM ll
 `temperature 0.2` (Ollama default 0.8), `num_ctx 4096` (default 2048), a system prompt.
 It is host-only configuration: it needs `ollama create` and an `ALLOWED_MODELS` edit.
 
-Quality: 13 unit, 38 integration and 56 CLI tests. CI runs typecheck, unit, integration
-and CLI checks.
+Quality (after 1a): 86 gateway unit, 64 integration (run on both Postgres and SQLite, plus
+3 Redis-only tests) and 87 CLI tests; `scripts/e2e.sh` runs 155 checks against real Ollama in
+both modes. CI: a `server` job (Postgres + Redis, typecheck, build, CLI) and a `sqlite` job.
 
 ### Not built (known limitations)
 
-- Ollama is the only provider. Models come from one global `ALLOWED_MODELS` list.
+- Ollama is the only provider. In server mode, models come from one global `ALLOWED_MODELS` list.
+- The gateway can't set Ollama's context size (the OpenAI-compatible API has no `num_ctx`);
+  it only warns on a mismatch. Planned with personas (native `/api/chat`, Phase 2).
+- A cold first answer starts ~2 s later: the reply waits until Ollama has loaded the model
+  (the price of clean errors).
 - A server crash mid-answer loses the in-flight text (the user message is kept).
 - No retry or continue for partial answers.
 - No export, import, search, pin or archive.
 - No key management endpoints (keys only via `npm run key:create`). No `last_used_at`,
   `expires_at` or key names beyond an optional `label`.
 - The CLI stores the API key in plaintext (0600 file). No keychain yet.
-- No UI for non-technical users. Requires Docker (Postgres and Redis) to run.
+- No UI for non-technical users: everything still needs a terminal (Phase 1b).
+- Restore needs the gateway stopped and a terminal command.
 
 ---
 
@@ -227,7 +251,7 @@ targets, not measurements. Sizes are rough, for one developer working part time.
 | Phase | Name | Goal | Gate (done when) | Status |
 | --- | --- | --- | --- | --- |
 | 0 | Stabilize | Make the engine trustworthy | All tests green | Done |
-| 1 | One-click app | A non-technical person gets a first answer without a terminal | On a clean Mac, first answer within 5 minutes of opening the installer (excluding download), history survives restart | Next (recommended) |
+| 1 | One-click app | A non-technical person gets a first answer without a terminal | On a clean Mac, first answer within 5 minutes of opening the installer (excluding download), history survives restart | In progress: 1a done, gate passed 2026-11-20; 1b after the wedge decision |
 | 2 | Everyday assistants | Useful for ordinary tasks before learning anything | 5 non-technical testers use it a week, none asks for setup help | Planned |
 | 2b | Engines and privacy modes (proposed) | Choose Private / Balanced / Best quality; more than Ollama | In Private mode, making the local model unavailable ends in an error and zero cloud requests | Proposed |
 | 3 | Your own stuff | Answers that know your documents and preferences | Every document answer shows its source; any memory can be viewed and deleted in two clicks | Planned |
@@ -244,6 +268,10 @@ Format for each feature: user story, behaviour, technical notes, done when.
 ### Phase 1: One-click app
 
 #### 1a. Single-user engine (build first)
+
+**Status: done, gate passed 2026-11-20** (steps and gate result in `docs/phase-1a-plan.md`,
+checklist in `docs/gate-walk.md`). Not yet tested: a first model download and a second
+macOS account; both move to the 1b installer.
 
 *As someone with only Node and Ollama installed, I want one command to start everything.*
 

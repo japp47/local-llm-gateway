@@ -12,7 +12,8 @@ Root (gateway):
   mode: SQLite in `DATA_DIR`, no Docker), `npm run build`, `npm start`
 - `npm run typecheck`, `npm test` (unit only, excludes `*.int.test.ts`)
 - `npm run test:int` (integration; needs Postgres at `TEST_DATABASE_URL`, default
-  `postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test`; it EMPTIES users, api_keys,
+  `postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test`, and Redis at `TEST_REDIS_URL`, default
+  `redis://127.0.0.1:6379`, for the Redis-only tests; it EMPTIES users, api_keys,
   conversations, messages, generations, so never point it at real data)
 - `npm run test:int:sqlite`: the same suite on in-memory SQLite, no services needed
 - `npm run db:generate` (generates Postgres AND SQLite migrations; schemas must change
@@ -31,8 +32,8 @@ Local services: `docker compose up -d redis postgres`, Ollama on :11434,
 `cp .env.example .env`, gateway on :3000.
 
 Before saying a change is done: run typecheck and both test suites (root and `cli/`),
-then list the files changed and how to test them by hand. Once single-user mode exists,
-run the shared suite in both modes.
+then list the files changed and how to test them by hand. Run the shared suite in both
+modes (`test:int` and `test:int:sqlite`); `bash scripts/e2e.sh` for anything end to end.
 
 ## Architecture
 
@@ -40,8 +41,8 @@ run the shared suite in both modes.
   Layers: `routes/` -> `services/` -> `storage/` ports (`ports.ts`, domain types in
   `types.ts`) -> adapters (`storage/postgres/`: Drizzle + postgres-js, schema, migrator).
   `storage/sqlite/` (better-sqlite3, migrations in `drizzle/sqlite/`) is the single-user
-  adapter; it is used by tests only until config selects it (step 5).
-  `createStorage(config)` in `storage/index.ts` is the only place that picks a backend.
+  adapter.
+  `openStorage(config)` in `storage/index.ts` is the only place that picks a backend.
   Routes, services and tests never touch Drizzle directly (`deps.repos.*`, `deps.storage`).
   Models: `services/models.service.ts` (`deps.models`: `list`, `getDefault`, `check`).
   Both `ALLOWED_MODELS` and `DEFAULT_MODEL` set (server mode, tests): a fixed list.
@@ -105,7 +106,7 @@ run the shared suite in both modes.
   postmaster.pid) allows one gateway per data folder; a dead owner's lock is taken over.
   First start creates user `local@localhost` and writes `local-credentials.json` (0600);
   the CLI uses that key only when no key is configured and the URL is the same local
-  gateway (`cli/src/local-credentials.ts`). Server mode (what exists today): Postgres + Redis
+  gateway (`cli/src/local-credentials.ts`). Server mode: Postgres + Redis
   (+ optional Prometheus) via Docker, for households and teams.
 - Chosen by config only: `DATABASE_URL` set -> Postgres, else SQLite; `REDIS_URL` set ->
   Redis limiter, else in-memory. Never ask the user to pick a mode.
@@ -153,7 +154,8 @@ run the shared suite in both modes.
 Phases:
 - 0 Stabilize: DONE (CLI credential safety, transcript paging, `/v1/stats`, integration
   tests, CI runs CLI checks).
-- 1 One-click app (IN PROGRESS: 1a steps 0-7c done; next is step 8, CI, docs and the gate walk). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
+- 1 One-click app (IN PROGRESS: 1a DONE, gate passed 2026-11-20; next is the wedge decision
+  via the interviews, then 1b). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
   limiting instead of Postgres/Redis, zero-config first run, model auto-picked by RAM,
   `llm doctor` diagnostics, tested `llm backup`/`llm restore`, OpenAPI from zod schemas,
   a migration upgrade test. 1b (after the wedge decision): installer and local web chat.

@@ -1,10 +1,96 @@
 # Local LLM Gateway
 
-A local-first LLM gateway built with **TypeScript, Fastify, Ollama, Redis, Prometheus, and Docker**.
+A private AI assistant that runs on your own computer. Your conversations never leave it.
 
-This project runs an open-weight LLM locally on an Apple Silicon Mac and places a backend service in front of it. The gateway adds API-key authentication, rate limiting, bounded concurrency, queueing/backpressure, request cancellation, streaming, and Prometheus metrics.
+It is a small server (TypeScript, Fastify) in front of [Ollama](https://ollama.com), plus a
+terminal app, `llm`. It keeps your conversation history, picks a model that fits your
+computer's memory, explains problems in plain words, and backs up your chats.
 
-The current implementation uses **Ollama + `llama3.2:3b`**. The design is intentionally OpenAI-compatible so the same client contract can later point to other models or providers.
+## Quick start (your own computer)
+
+You need **Node.js 22 or newer** and **Ollama**. No Docker, no database to set up.
+
+```bash
+# 1. Start Ollama: open the Ollama app (or run `ollama serve` in its own window)
+
+# 2. The assistant
+git clone https://github.com/japp47/local-llm-gateway.git && cd local-llm-gateway
+npm ci && npm run build
+npm start
+```
+
+On first start it creates its data folder, picks a model for your memory size, and makes
+a key for the terminal app. If no model is downloaded yet, the log tells you which one to
+get, for example `ollama pull qwen3:8b`.
+
+```bash
+# 3. The terminal app, in a second window
+cd cli && npm ci && npm run build && npm install -g .
+llm chat "hello"
+```
+
+No key to copy: `llm` finds the one the assistant made. If anything doesn't work:
+
+```bash
+llm doctor
+```
+
+It checks Ollama, the model, the assistant, your key and the database, and says how to
+fix whatever is wrong.
+
+### Everyday commands
+
+| Command | What it does |
+| --- | --- |
+| `llm chat` | Talk (interactive). `llm chat "question"` asks once |
+| `llm ls`, `llm show <id>`, `llm resume <id>` | Your conversations |
+| `llm fork <id>` | Try another way from an earlier answer |
+| `llm models` | Downloaded models; `*` marks the one in use |
+| `llm doctor` | What is wrong, and how to fix it |
+| `llm backup` | Save a copy of all conversations |
+| `llm restore <file>` | How to put a backup back |
+| `llm stats` | Speed and token use |
+
+### Where your data is
+
+Everything is in one folder: `~/Library/Application Support/llm-gateway` on macOS
+(`~/.local/share/llm-gateway` on Linux). Set `DATA_DIR` to use another one.
+
+- `gateway.db`: your conversations (SQLite)
+- `backups/`: what `llm backup` writes
+- `local-credentials.json`: the key the terminal app uses (only you can read it)
+
+To restore a backup, stop the assistant (Ctrl+C), then run `npm run restore -- <file>`. Your
+current conversations are moved to `backups/before-restore-<time>.db`, never deleted.
+
+## Server mode (a household or a team)
+
+The same assistant, with Postgres and Redis, for several people with their own keys.
+
+```bash
+docker compose up -d postgres redis
+cp .env.example .env              # sets DATABASE_URL and REDIS_URL: that switches to server mode
+npm run db:migrate
+npm run key:create -- you@example.com   # prints a key once
+npm start
+llm profile add home                    # paste the key when asked
+llm chat "hello"
+```
+
+The mode is chosen only by configuration: `DATABASE_URL` set means server mode, otherwise
+single-user mode. Back up a server with Postgres tools (`llm backup` shows the command).
+
+## For developers
+
+- API: `http://localhost:3000/openapi.json` (OpenAPI 3.1, also in `docs/openapi.json`).
+  Every error is `{ error: { code, message, hint?, request_id } }`.
+- `npm run dev` (server mode with `.env`) or `npm run dev:single` (single-user, no Docker).
+- Tests: `npm test`, `npm run test:int` (Postgres and Redis from Docker),
+  `npm run test:int:sqlite` (no services), `bash scripts/e2e.sh` (everything, against real Ollama).
+- Plan and roadmap: `docs/product-roadmap-3.md`, `docs/phase-1a-plan.md`.
+
+The rest of this README explains how local LLMs work and why the gateway is built the way
+it is: tokens, prefill and decode, memory, queueing, metrics.
 
 ---
 
@@ -1675,11 +1761,17 @@ ollama stop llama3.2:3b
 ### Project
 
 ```bash
-npm run dev
-npm test
+npm start                 # single-user mode unless .env sets DATABASE_URL
+npm run dev               # watch mode, reads .env
+npm run dev:single        # watch mode, forced single-user (no Docker)
 npm run build
-npm run start
+npm test                  # unit
+npm run test:int          # integration on Postgres + Redis
+npm run test:int:sqlite   # integration on SQLite
+npm run openapi           # regenerate docs/openapi.json
+npm run restore -- <file> # restore a single-user backup (assistant stopped)
 npm run bench -- 1 6
+llm doctor
 ```
 
 ### Docker

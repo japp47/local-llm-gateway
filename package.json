@@ -46,8 +46,9 @@
     "openapi": "tsx scripts/openapi.ts",
     "test:int:sqlite": "TEST_BACKEND=sqlite vitest run -c vitest.config.int.ts",
     "dev:single": "DATABASE_URL= REDIS_URL= ALLOWED_MODELS= DEFAULT_MODEL= tsx watch --env-file-if-exists=.env src/server.ts",
-    "prepack": "npm run build && npm --prefix cli run build",
-    "pack:smoke": "bash scripts/pack-smoke.sh"
+    "prepack": "npm run clean && npm run build && npm --prefix cli run build",
+    "pack:smoke": "bash scripts/pack-smoke.sh",
+    "clean": "node -e \"for (const d of ['dist', 'cli/dist']) require('fs').rmSync(d, { recursive: true, force: true })\""
   },
   "dependencies": {
     "@fastify/rate-limit": "^11.2.0",

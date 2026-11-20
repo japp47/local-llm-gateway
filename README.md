@@ -13,21 +13,23 @@ You need **Node.js 22 or newer** and **Ollama**. No Docker, no database to set u
 ```bash
 # 1. Start Ollama: open the Ollama app (or run `ollama serve` in its own window)
 
-# 2. The assistant
-git clone https://github.com/japp47/local-llm-gateway.git && cd local-llm-gateway
-npm ci && npm run build
-npm start
+# 2. Install and start the assistant
+npm install -g local-llm-gateway
+llm start
 ```
 
 On first start it creates its data folder, picks a model for your memory size, and makes
 a key for the terminal app. If no model is downloaded yet, the log tells you which one to
-get, for example `ollama pull qwen3:8b`.
+get, for example `ollama pull qwen3:8b`. `llm start` keeps running in that window; Ctrl+C
+stops it.
 
 ```bash
-# 3. The terminal app, in a second window
-cd cli && npm ci && npm run build && npm install -g .
+# 3. In a second window
 llm chat "hello"
 ```
+
+To try it without installing: `npx -p local-llm-gateway llm start` (and
+`npx -p local-llm-gateway llm chat "hello"` in a second window).
 
 No key to copy: `llm` finds the one the assistant made. If anything doesn't work:
 

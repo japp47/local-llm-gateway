@@ -41,6 +41,10 @@ export function printSummary(res: StreamResult, quiet: boolean): boolean {
   return ok;
 }
 
+const LLM_SUBCOMMANDS = 'profile|config|start|doctor|backup|restore|chat|resume|ls|conversations|show|fork|rename|rm|models|stats|whoami';
+/** `llm profile use local` typed into the chat: a command for the terminal, not a question. */
+export const looksLikeLlmCommand = (line: string) => new RegExp(`^llm\\s+(${LLM_SUBCOMMANDS})\\b`).test(line);
+
 export async function runRepl(opts: ReplOptions): Promise<void> {
   const { client } = opts;
   let conversationId = opts.conversationId;
@@ -224,11 +228,16 @@ export async function runRepl(opts: ReplOptions): Promise<void> {
         /* ignore empty input */
       } else if (line.startsWith('/')) {
         if (!(await slash(line))) break;
+      } else if (looksLikeLlmCommand(line)) {
+        // Not sent to the model: the user meant their terminal, not the chat.
+        console.error(errc.yellow(`That's a terminal command, so it wasn't sent to the assistant.\n  → Type /exit, then run: ${line}`));
       } else {
         await turn(line);
       }
     } catch (e) {
-      console.error(errc.red(await describeErrorFully(e)));
+      const text = await describeErrorFully(e);
+      console.error(errc.red(text));
+      if (/→ .*\bllm /.test(text)) console.error(errc.dim('  (Those are terminal commands: type /exit first.)'));
     }
     rl.setPrompt(promptText());
     rl.prompt();

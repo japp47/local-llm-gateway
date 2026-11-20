@@ -98,11 +98,12 @@ export async function makeTestApp(
     DEFAULT_MODEL: 'fake-model',
     ...env,
   });
-  const { app, deps } = await buildApp({ config, provider, storage });
+  const { app, deps, routes } = await buildApp({ config, provider, storage });
 
   return {
     app,
     deps,
+    routes,
     addUser: (email: string) => addUser(deps, email),
     close: async () => {
       await app.close();

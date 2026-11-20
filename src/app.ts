@@ -80,6 +80,19 @@ export async function buildApp(opts: BuildOptions = {}) {
     reply.header('x-request-id', req.id);
   });
 
+  // Every registered route, so the contract test can check each one is documented.
+  const routes: { method: string; url: string }[] = [];
+  app.addHook('onRoute', (r) => {
+    for (const method of [r.method].flat()) if (method !== 'HEAD') routes.push({ method, url: r.url });
+  });
+
+  // Unknown URLs get the same error shape as everything else.
+  app.setNotFoundHandler((req, reply) =>
+    reply.code(404).send({
+      error: { code: 'not_found', message: `There is no ${req.method} ${req.url.split('?')[0]}.`, request_id: req.id },
+    }),
+  );
+
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof AppError) {
       for (const [k, v] of Object.entries(err.headers)) reply.header(k, v);
@@ -204,5 +217,5 @@ export async function buildApp(opts: BuildOptions = {}) {
     { prefix: '/v1' },
   );
 
-  return { app, deps };
+  return { app, deps, routes };
 }

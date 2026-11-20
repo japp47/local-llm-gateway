@@ -313,6 +313,16 @@ mode: both point to pg_dump / pg_restore. Round trip tested in the unit suite an
 - Generate the spec from the route zod schemas and test responses against it in CI.
 - Commit: `feat: generate OpenAPI from the request schemas`.
 
+Done 2026-11-20. Every request AND response shape now lives in `src/api/schemas.ts` (routes
+validate with it; responses are strict objects), every endpoint in `src/api/endpoints.ts`.
+`src/api/openapi.ts` builds OpenAPI 3.1 with zod 4's own JSON Schema output (no converter
+library); SSE events are documented under `x-sse-events`. Served at `GET /openapi.json`,
+committed as `docs/openapi.json` (`npm run openapi`). `test/contract.int.test.ts` (both
+backends, in CI) validates real responses against the document with ajv, checks every
+registered route is documented and vice versa, that every documented success response is
+produced by a test, that $refs resolve, and that `docs/openapi.json` is current. Unknown
+URLs now return the standard error shape (`not_found`).
+
 ### Step 8: CI, docs, gate walk
 - CI: a `server` job with a Redis service, for Redis-only behaviour (the `sqlite` job
   arrived in step 4). CLI checks stay.

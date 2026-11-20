@@ -18,6 +18,7 @@ Root (gateway):
 - `npm run db:generate` (generates Postgres AND SQLite migrations; schemas must change
   together) / `npm run db:migrate` (Postgres)
 - `npm run key:create -- you@example.com [label]` prints a raw API key once
+- `npm run openapi` regenerates `docs/openapi.json` (the contract test fails if it is stale)
 - `npm run restore -- <file>`: restore a single-user backup (gateway stopped; with
   `DATABASE_URL` in `.env`, prefix `DATABASE_URL=`). `llm doctor`, `llm backup`.
 
@@ -88,6 +89,11 @@ run the shared suite in both modes.
   `{ error: { code, message, hint? } }`: `code` is stable for programs, `message` is
   plain language, `hint` (optional) says what to do. SSE `error` events carry the same.
   Response fields are camelCase.
+- API contract: all request/response shapes in `src/api/schemas.ts` (responses are strict
+  objects), endpoints in `src/api/endpoints.ts`, OpenAPI 3.1 built by `src/api/openapi.ts`
+  and served at `/openapi.json`. Adding or changing an endpoint: update both files, run
+  `npm run openapi`; `test/contract.int.test.ts` checks real responses against the document
+  and that every registered route is documented.
 - CLI: `cli/src/config.ts` (profiles and precedence: env > active profile > legacy flat
   keys), `commands/`, `api/client.ts`. Config file path: `llm config path`.
 
@@ -147,7 +153,7 @@ run the shared suite in both modes.
 Phases:
 - 0 Stabilize: DONE (CLI credential safety, transcript paging, `/v1/stats`, integration
   tests, CI runs CLI checks).
-- 1 One-click app (IN PROGRESS: 1a steps 0-7b done; next is step 7c, OpenAPI from zod). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
+- 1 One-click app (IN PROGRESS: 1a steps 0-7c done; next is step 8, CI, docs and the gate walk). 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
   limiting instead of Postgres/Redis, zero-config first run, model auto-picked by RAM,
   `llm doctor` diagnostics, tested `llm backup`/`llm restore`, OpenAPI from zod schemas,
   a migration upgrade test. 1b (after the wedge decision): installer and local web chat.

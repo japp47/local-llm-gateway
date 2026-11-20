@@ -15,6 +15,7 @@
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
     "key:create": "tsx --env-file-if-exists=.env scripts/create-key.ts",
     "restore": "tsx --env-file-if-exists=.env scripts/restore.ts",
+    "openapi": "tsx scripts/openapi.ts",
     "test:int:sqlite": "TEST_BACKEND=sqlite vitest run -c vitest.config.int.ts",
     "dev:single": "DATABASE_URL= REDIS_URL= ALLOWED_MODELS= DEFAULT_MODEL= tsx watch --env-file-if-exists=.env src/server.ts"
   },
@@ -35,6 +36,7 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.4",
+    "ajv": "^8.20.0",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

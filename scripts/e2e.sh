@@ -63,6 +63,7 @@ shared_features() {
   bold "[$MODE] Health"
   api GET /healthz; check "/healthz 200" is "$STATUS" 200
   check "/healthz says the mode" jqe ".mode == \"$MODE\""
+  api GET /openapi.json; check "/openapi.json is an OpenAPI 3.1 document" jqe '.openapi == "3.1.0" and (.paths | length) > 10'
   api GET /readyz
   check "/readyz ok, db and ollama up" jqe '.ok and .db and .ollama'
 

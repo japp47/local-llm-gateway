@@ -1,25 +1,10 @@
 // Legacy stateless passthrough. Kept working while conversations are built beside it.
 import type { FastifyPluginAsync } from 'fastify';
-import { z } from 'zod';
+import { LegacyChatBody as Body } from '../api/schemas.js';
 import type { Deps } from '../app.js';
 import { AppError } from '../lib/errors.js';
 import { QueueFullError } from '../lib/semaphore.js';
 import { writeChunk } from '../lib/sse.js';
-
-const Body = z.object({
-  model: z.string(),
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(['system', 'user', 'assistant']),
-        content: z.string().max(32_000),
-      }),
-    )
-    .min(1),
-  stream: z.boolean().optional().default(false),
-  temperature: z.number().min(0).max(2).optional(),
-  max_tokens: z.number().int().positive().max(2048).optional(),
-});
 
 export const chatRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps }) => {
   const { config, limiter, metrics } = deps;

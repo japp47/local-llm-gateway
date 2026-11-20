@@ -57,7 +57,7 @@ export class ApiClient {
     } catch (error) {
       if (isAbort(error)) throw error;
       throw new ConnectionError(
-        `Cannot reach the gateway at ${this.cfg.baseUrl}. Is it running? (npm run dev)`,
+        `The assistant isn't running at ${this.cfg.baseUrl}.\n  → Start it with: npm start (in the gateway folder)`,
       );
     }
     if (!response.ok) throw await toApiError(response);

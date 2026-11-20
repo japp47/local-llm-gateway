@@ -9,11 +9,15 @@ export class CliError extends Error {
   }
 }
 
+/** A message, then what to do about it on its own line. */
+export const withHint = (message: string, hint?: string) => (hint ? `${message}\n  → ${hint}` : message);
+
 export function describeError(e: unknown): string {
   if (e instanceof ApiError) {
     switch (e.code) {
       case 'invalid_api_key':
-        return 'The gateway rejected your API key. Update the saved key with: llm config set apiKey  (you will be prompted)';
+        // Shown only when the fuller diagnosis (key-diagnosis.ts) could not run.
+        return withHint('The gateway rejected your API key.', 'Save a valid key with: llm config set apiKey  (you will be prompted)');
       case 'conversation_busy':
         return 'That conversation is still generating a reply. Wait for it to finish, then retry.';
       case 'server_busy':
@@ -27,6 +31,8 @@ export function describeError(e: unknown): string {
       case 'conversation_not_found':
         return 'Conversation not found (or it belongs to another key). See: llm ls';
       default:
+        // The gateway's own plain-language message and hint (e.g. "Ollama isn't running.").
+        if (e.hint) return withHint(e.message, e.hint);
         return `${e.message} [${e.code}${e.requestId ? ` ${e.requestId}` : ''}]`;
     }
   }

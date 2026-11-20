@@ -91,6 +91,12 @@ describe('single-user storage', () => {
     expect(again.statusCode).toBe(200);
     expect(again.json()).toMatchObject({ title: 'Keep me', messageCount: 2 });
   });
+
+  it('says which mode it runs in on /healthz, so the CLI can explain a rejected key', async () => {
+    const { app } = await buildApp({ config: singleConfig(tempDataDir()), provider: new FakeProvider() });
+    cleanup.push(() => app.close());
+    expect((await app.inject({ method: 'GET', url: '/healthz' })).json()).toEqual({ ok: true, mode: 'single' });
+  });
 });
 
 describe('one gateway per data folder', () => {

@@ -26,9 +26,7 @@ export const chatRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps
 
   app.post('/chat/completions', async (req, reply) => {
     const body = Body.parse(req.body);
-    if (!config.allowedModels.has(body.model)) {
-      throw new AppError(400, 'model_not_allowed', `model not allowed: ${body.model}`);
-    }
+    await deps.models.check(body.model);
 
     const ac = new AbortController();
     const timeout = setTimeout(() => ac.abort(), config.REQUEST_TIMEOUT_MS);
@@ -43,7 +41,7 @@ export const chatRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps
       clearTimeout(timeout);
       if (err instanceof QueueFullError) {
         metrics.rejected.inc({ reason: 'queue_full' });
-        throw new AppError(503, 'server_busy', 'server busy, retry later', { 'retry-after': '5' });
+        throw new AppError(503, 'server_busy', 'server busy, retry later', { headers: { 'retry-after': '5' } });
       }
       throw new AppError(504, 'cancelled', 'cancelled or timed out while queued');
     }

@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -31,6 +31,20 @@ describe('local gateway credentials', () => {
       keySource: 'local-gateway',
     });
   });
+
+  it('a profile saved without a key (llm profile add --local) uses the local key', () => {
+    writeCreds('http://localhost:3000', 'llmgw_rotated_key');
+    addProfile('withkey', { baseUrl: 'http://localhost:3000', apiKey: 'llmgw_server_key' }, configFile);
+    addProfile('local', { baseUrl: 'http://localhost:3000' }, configFile);
+    expect(load()).toMatchObject({ currentProfile: 'withkey', apiKey: 'llmgw_server_key' });
+    useLocalProfile();
+    expect(load()).toMatchObject({ currentProfile: 'local', apiKey: 'llmgw_rotated_key', keySource: 'local-gateway' });
+  });
+  const useLocalProfile = () => {
+    const file = JSON.parse(readFileSync(configFile, 'utf8'));
+    expect(file.profiles.local).not.toHaveProperty('apiKey'); // nothing secret is stored
+    writeFileSync(configFile, JSON.stringify({ ...file, currentProfile: 'local' }));
+  };
 
   it('treats localhost, 127.0.0.1 and ::1 as the same machine', () => {
     writeCreds('http://localhost:3000');

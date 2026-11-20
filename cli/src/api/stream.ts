@@ -61,6 +61,7 @@ function applyEvent(result: StreamResult, event: string, raw: string, handlers: 
       result.error = {
         code: requiredString(data, 'code', event),
         message: requiredString(data, 'message', event),
+        ...(typeof data.hint === 'string' ? { hint: data.hint } : {}),
       };
       break;
     case 'done': {

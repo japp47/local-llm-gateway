@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { totalmem } from 'node:os';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { Redis } from 'ioredis';
@@ -10,6 +11,7 @@ import { HeuristicTokenCounter } from './lib/tokens.js';
 import { makeAuthHook } from './plugins/auth.js';
 import { createMetrics, type Metrics } from './plugins/metrics.js';
 import { OllamaProvider } from './providers/ollama.js';
+import { OllamaModels } from './providers/ollama-models.js';
 import type { LLMProvider } from './providers/types.js';
 import { chatRoutes } from './routes/chat.js';
 import { conversationRoutes } from './routes/conversations.js';
@@ -18,7 +20,8 @@ import { modelRoutes } from './routes/models.js';
 import { AuthService } from './services/auth.service.js';
 import { ConversationService } from './services/conversation.service.js';
 import { ensureLocalIdentity } from './services/local-identity.js';
-import { ModelsService } from './services/models.service.js';
+import { makeFitChecker } from './services/model-fit.js';
+import { ModelsService, type ModelSource } from './services/models.service.js';
 import {
   openStorage,
   sqlitePath,
@@ -29,7 +32,6 @@ import {
   type Storage,
   type UsersStore,
 } from './storage/index.js';
-import { ModelsRepo } from './repositories/models.js';
 import { meRoutes } from './routes/me.js';
 import { statsRoutes } from './routes/stats.js';
 
@@ -39,6 +41,8 @@ export interface Deps {
   limiter: Semaphore;
   metrics: Metrics;
   provider: LLMProvider;
+  /** Model metadata from Ollama (installed, loaded). Used for model discovery and diagnostics. */
+  ollama: OllamaModels;
   auth: AuthService;
   conversations: ConversationService;
   models: ModelsService;
@@ -48,7 +52,6 @@ export interface Deps {
     conversations: ConversationsStore;
     messages: MessagesStore;
     generations: GenerationsStore;
-    models: ModelsRepo;
   };
 }
 
@@ -56,6 +59,9 @@ export interface BuildOptions {
   config?: config;
   provider?: LLMProvider;
   storage?: Storage;
+  /** Tests: stand-ins for Ollama's model list and this machine's memory. */
+  modelSource?: ModelSource;
+  totalMemoryBytes?: number;
 }
 
 export async function buildApp(opts: BuildOptions = {}) {
@@ -75,7 +81,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     if (err instanceof AppError) {
       for (const [k, v] of Object.entries(err.headers)) reply.header(k, v);
       return reply.code(err.status).send({
-        error: { code: err.code, message: err.message, request_id: req.id },
+        error: { code: err.code, message: err.message, ...(err.hint ? { hint: err.hint } : {}), request_id: req.id },
       });
     }
     if (err instanceof ZodError) {
@@ -111,16 +117,26 @@ export async function buildApp(opts: BuildOptions = {}) {
     conversations: storage.conversations,
     messages: storage.messages,
     generations: storage.generations,
-    models: new ModelsRepo(config.allowedModels),
   };
   const limiter = new Semaphore(config.MAX_CONCURRENCY, config.MAX_QUEUE);
   const metrics = createMetrics(limiter);
   const provider = opts.provider ?? new OllamaProvider(config.OLLAMA_URL);
+  const ollama = new OllamaModels(config.OLLAMA_URL);
   const auth = new AuthService(repos.apiKeys);
-  const models = new ModelsService(repos.models, config.DEFAULT_MODEL);
+  const models = new ModelsService({
+    ...config.models,
+    source: opts.modelSource ?? ollama,
+    totalMemoryBytes: opts.totalMemoryBytes ?? totalmem(),
+    contextTokens: config.MODEL_CONTEXT_TOKENS,
+  });
   const conversations = new ConversationService({
     config,
     provider,
+    models,
+    // Only for real Ollama: a test's fake provider has nothing loaded to inspect.
+    onAnswered: opts.provider
+      ? undefined
+      : makeFitChecker(ollama, config.MODEL_CONTEXT_TOKENS, (msg) => app.log.warn(msg)),
     limiter,
     metrics,
     counter: new HeuristicTokenCounter(),
@@ -128,7 +144,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     messages: repos.messages,
     generations: repos.generations,
   });
-  const deps: Deps = { config, storage, limiter, metrics, provider, auth, conversations, models, repos };
+  const deps: Deps = { config, storage, limiter, metrics, provider, ollama, auth, conversations, models, repos };
 
   let redis: Redis | null = null;
   if (config.REDIS_URL) {

@@ -3,7 +3,9 @@ import { ollamaReady } from '../lib/ollama.js';
 import type { Deps } from '../app.js';
 
 export const healthRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app, { deps }) => {
-  app.get('/healthz', async () => ({ ok: true }));
+  // `mode` lets the CLI explain a rejected key: both modes usually listen on the same port.
+  // It reveals nothing secret: no paths, versions or URLs.
+  app.get('/healthz', async () => ({ ok: true, mode: deps.config.mode }));
 
   app.get('/readyz', async (_req, reply) => {
     const [ollama, db] = await Promise.all([

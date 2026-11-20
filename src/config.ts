@@ -13,8 +13,10 @@ const Env = z.object({
   REDIS_URL: optionalString, // unset => in-memory rate limiting
   DATABASE_URL: optionalString, // unset => single-user mode: SQLite in DATA_DIR
   DATA_DIR: optionalString, // unset => the OS's usual place for app data
-  ALLOWED_MODELS: z.string().default('llama3.2:3b'),
-  DEFAULT_MODEL: z.string().default('llama3.2:3b'),
+  // Unset in single-user mode: allowed = what Ollama has installed, default = picked to fit
+  // this machine's memory. Unset in server mode: llama3.2:3b, as before.
+  ALLOWED_MODELS: optionalString,
+  DEFAULT_MODEL: optionalString,
   MAX_CONCURRENCY: z.coerce.number().int().positive().default(1),
   MAX_QUEUE: z.coerce.number().int().nonnegative().default(8),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
@@ -41,14 +43,23 @@ export function defaultDataDir(
   return join(env.XDG_DATA_HOME ?? join(home, '.local', 'share'), 'llm-gateway');
 }
 
+/** Server mode's fallback when the model settings are unset (the pre-auto-pick behaviour). */
+export const SERVER_FALLBACK_MODEL = 'llama3.2:3b';
+
 export function createConfig(env: Env = process.env) {
   const e = Env.parse(env);
+  /** Chosen by configuration only; the user is never asked. */
+  const mode = (e.DATABASE_URL ? 'server' : 'single') as 'server' | 'single';
+  const fallback = mode === 'server' ? SERVER_FALLBACK_MODEL : undefined;
   return {
     ...e,
-    allowedModels: new Set(list(e.ALLOWED_MODELS)),
-    /** Chosen by configuration only; the user is never asked. */
-    mode: (e.DATABASE_URL ? 'server' : 'single') as 'server' | 'single',
+    mode,
     dataDir: e.DATA_DIR ?? defaultDataDir(process.platform, env),
+    /** `undefined` means "discover from Ollama" (single-user mode only). */
+    models: {
+      allowed: e.ALLOWED_MODELS ? list(e.ALLOWED_MODELS) : fallback ? [fallback] : undefined,
+      defaultModel: e.DEFAULT_MODEL ?? fallback,
+    },
   };
 }
 

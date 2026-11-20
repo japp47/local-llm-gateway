@@ -114,7 +114,7 @@ function assertGatewayUrl(url: string): string {
 }
 
 /** True when two gateway URLs point at the same place (case-insensitive host, no trailing slash). */
-function sameGateway(a: string, b: string): boolean {
+export function sameGateway(a: string, b: string): boolean {
   try {
     const ua = new URL(stripTrailingSlashes(a));
     const ub = new URL(stripTrailingSlashes(b));

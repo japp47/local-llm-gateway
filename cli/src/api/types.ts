@@ -136,6 +136,8 @@ export interface StreamHandlers {
 export interface StreamError {
   code: string;
   message: string;
+  /** What to do about it, when the gateway knows (newer gateways only). */
+  hint?: string;
 }
 
 export interface StreamResult {

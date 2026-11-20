@@ -59,10 +59,8 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
 
   app.post('/conversations', async (req, reply) => {
     const body = CreateBody.parse(req.body ?? {});
-    const model = body.model ?? config.DEFAULT_MODEL;
-    if (!config.allowedModels.has(model)) {
-      throw new AppError(400, 'model_not_allowed', `model not allowed: ${model}`);
-    }
+    const model = body.model ?? (await deps.models.getDefault()).id;
+    await deps.models.check(model);
     const conv = await repos.conversations.create({
       userId: userId(req),
       defaultModel: model,
@@ -75,13 +73,7 @@ export const conversationRoutes: FastifyPluginAsync<{ deps: Deps }> = async (app
   app.post('/conversations/:id/forks', async (req, reply) => {
     const { id } = Params.parse(req.params);
     const body = ForkBody.parse(req.body);
-    if (body.defaultModel !== undefined && !config.allowedModels.has(body.defaultModel)) {
-      throw new AppError(
-        400,
-        'model_not_allowed',
-        `model not allowed: ${body.defaultModel}`,
-      );
-    }
+    if (body.defaultModel !== undefined) await deps.models.check(body.defaultModel);
 
     const result = await repos.conversations.fork({
       userId: userId(req),

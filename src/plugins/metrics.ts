@@ -1,4 +1,4 @@
-import client from 'prom-client';
+import client from '@prometheus-io/client';
 import type { Semaphore } from '../lib/semaphore.js';
 
 export function createMetrics(limiter: Semaphore) {

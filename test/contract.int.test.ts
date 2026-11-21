@@ -116,6 +116,19 @@ describe('API contract', () => {
     expect(new Set(registered)).toEqual(new Set(documented));
   });
 
+  it('the web page: served with a strict Content-Security-Policy; its files under /assets/', async () => {
+    const page = await call('GET', '/', undefined, {});
+    expect(page.payload).toContain('<div id="root">');
+    const csp = String(page.headers['content-security-policy']);
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).toContain("frame-ancestors 'none'");
+    expect(csp).not.toContain('unsafe-inline');
+    expect(page.headers['x-content-type-options']).toBe('nosniff');
+    const asset = await t.app.inject({ method: 'GET', url: '/assets/app.js' });
+    expect(asset.statusCode).toBe(200);
+    expect(asset.headers['cache-control']).toContain('immutable');
+  });
+
   it('health endpoints', async () => {
     await call('GET', '/healthz', undefined, {});
     await call('GET', '/readyz', undefined, {}); // Ollama is "down" here: 503 with the same shape
@@ -177,6 +190,20 @@ describe('API contract', () => {
     await call('POST', `/v1/conversations/${conv.id}/messages`, { content: 'x'.repeat(16_000) }); // 413 at 4096 tokens
   });
 
+  it('web sign-in: code, session, a cookie request, sign out, and the refusals', async () => {
+    const page = { host: 'localhost:3000', origin: 'http://localhost:3000' };
+    const code = (await call('POST', '/v1/web/codes')).json().code;
+    const signedIn = await call('POST', '/web/session', { code }, page);
+    const token = signedIn.cookies.find((c) => c.name === 'llmgw_session')!.value;
+    const browser = { ...page, cookie: `llmgw_session=${token}` };
+    await call('POST', '/v1/web/codes', undefined, browser); // 403 key_required
+    await call('POST', '/web/session', { code }, page); // 401 invalid_code (used)
+    await call('POST', '/web/session', { code: 'x'.repeat(20) }, { host: 'evil.example', origin: 'http://evil.example' }); // 403
+    await call('GET', '/v1/me', undefined, browser);
+    await call('DELETE', '/web/session', undefined, browser);
+    await call('GET', '/v1/me', undefined, browser); // 401 session_expired
+  });
+
   it('legacy passthrough: Ollama unreachable is a documented 502', async () => {
     await call('POST', '/v1/chat/completions', { model: 'fake-model', messages: [{ role: 'user', content: 'hi' }] });
   });
@@ -200,6 +227,21 @@ describe('API contract: rate limit and single-user-only endpoints', () => {
       conforms('GET', '/v1/me', res);
     } finally {
       await t.close();
+    }
+  });
+
+  it('page not built: a plain 404 with what to do (the API keeps working)', async () => {
+    const config = createConfig({ DATA_DIR: mkdtempSync(join(tmpdir(), 'llmgw-nopage-')), LOG_LEVEL: 'silent', ALLOWED_MODELS: 'fake-model', DEFAULT_MODEL: 'fake-model' });
+    const ollama: OllamaInfo = { version: async () => 'x', installed: async () => [], loaded: async () => [] };
+    const { app } = await buildApp({ config, provider: new FakeProvider(), ollama, webRoot: null });
+    try {
+      const res = await app.inject({ method: 'GET', url: '/' });
+      expect(res.statusCode).toBe(404);
+      expect(res.json().error).toMatchObject({ code: 'page_not_built' });
+      conforms('GET', '/', res);
+    } finally {
+      await app.close();
+      rmSync(config.dataDir, { recursive: true, force: true });
     }
   });
 

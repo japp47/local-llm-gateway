@@ -7,6 +7,7 @@ import { PgConversationsStore } from './conversations.js';
 import { PgGenerationsStore } from './generations.js';
 import { PgApiKeysStore, PgUsersStore } from './identity.js';
 import { PgMessagesStore } from './messages.js';
+import { PgWebSessionsStore } from './web-sessions.js';
 
 export interface PostgresStorage extends Storage {
   /** Raw drizzle handle for tests and scripts. Routes and services only see `Storage`. */
@@ -18,6 +19,7 @@ export function createPostgresStorage(url: string): PostgresStorage {
   return {
     db,
     users: new PgUsersStore(db),
+    webSessions: new PgWebSessionsStore(db),
     apiKeys: new PgApiKeysStore(db),
     conversations: new PgConversationsStore(db),
     messages: new PgMessagesStore(db),

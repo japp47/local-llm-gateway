@@ -128,6 +128,11 @@ export class ApiClient {
     return this.json<CurrentUser>('GET', '/v1/me');
   }
 
+  /** A one-time code that signs the web page in (60 seconds, works once). API key only. */
+  webCode() {
+    return this.json<{ code: string; expiresAt: string }>('POST', '/v1/web/codes');
+  }
+
   /** Asks the gateway to write a checked backup into its data folder. Single-user mode. */
   backup() {
     return this.json<BackupSummary>('POST', '/v1/backup');

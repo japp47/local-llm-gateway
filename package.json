@@ -31,15 +31,16 @@
     "cli/dist",
     "README.md",
     "LICENSE",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "dist/web"
   ],
   "scripts": {
     "test": "vitest run --exclude \"**/*.int.test.ts\"",
     "dev": "tsx watch --env-file-if-exists=.env src/server.ts",
-    "build": "tsc && node -e \"require('fs').chmodSync('dist/src/server.js', 0o755)\"",
+    "build": "tsc && node -e \"require('fs').chmodSync('dist/src/server.js', 0o755)\" && npm run build:web",
     "start": "node --env-file-if-exists=.env dist/src/server.js",
     "bench": "tsx --env-file-if-exists=.env scripts/bench.ts",
-    "typecheck": "tsc -p tsconfig.check.json",
+    "typecheck": "tsc -p tsconfig.check.json && tsc -p web/tsconfig.json",
     "test:int": "vitest run -c vitest.config.int.ts",
     "db:generate": "drizzle-kit generate && drizzle-kit generate --config drizzle.sqlite.config.ts",
     "db:migrate": "tsx --env-file-if-exists=.env scripts/migrate.ts",
@@ -50,10 +51,14 @@
     "dev:single": "DATABASE_URL= REDIS_URL= ALLOWED_MODELS= DEFAULT_MODEL= tsx watch --env-file-if-exists=.env src/server.ts",
     "prepack": "npm run clean && npm run build && npm --prefix cli run build",
     "pack:smoke": "bash scripts/pack-smoke.sh",
-    "clean": "node -e \"for (const d of ['dist', 'cli/dist']) require('fs').rmSync(d, { recursive: true, force: true })\""
+    "clean": "node -e \"for (const d of ['dist', 'cli/dist']) require('fs').rmSync(d, { recursive: true, force: true })\"",
+    "build:web": "vite build --config web/vite.config.ts",
+    "dev:web": "vite --config web/vite.config.ts"
   },
   "dependencies": {
+    "@fastify/cookie": "^11.1.5",
     "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.12",
     "@prometheus-io/client": "^0.16.1",
     "better-sqlite3": "^13.0.3",
     "commander": "^15.0.0",
@@ -66,10 +71,16 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
     "ajv": "^8.20.0",
     "drizzle-kit": "^0.31.11",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
+    "vite": "^8.3.8",
     "vitest": "^5.0.3"
   }
 }

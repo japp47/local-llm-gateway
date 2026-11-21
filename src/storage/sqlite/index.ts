@@ -6,6 +6,7 @@ import { SqliteConversationsStore } from './conversations.js';
 import { SqliteGenerationsStore } from './generations.js';
 import { SqliteApiKeysStore, SqliteUsersStore } from './identity.js';
 import { SqliteMessagesStore } from './messages.js';
+import { SqliteWebSessionsStore } from './web-sessions.js';
 
 export interface SqliteStorage extends Storage {
   /** Raw drizzle handle for tests and scripts. Routes and services only see `Storage`. */
@@ -18,6 +19,7 @@ export function createSqliteStorage(path: string): SqliteStorage {
   return {
     db,
     users: new SqliteUsersStore(db),
+    webSessions: new SqliteWebSessionsStore(db),
     apiKeys: new SqliteApiKeysStore(db),
     conversations: new SqliteConversationsStore(db),
     messages: new SqliteMessagesStore(db),

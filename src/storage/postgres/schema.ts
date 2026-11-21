@@ -99,3 +99,27 @@ export const generations = pgTable(
     index('generations_request_idx').on(t.requestId),
   ],
 );
+// Browser sign-in (web chat). Only hashes are stored, like API keys.
+// A one-time code (from `llm open`) is exchanged once for a session cookie.
+export const webCodes = pgTable('web_codes', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  codeHash: text('code_hash').notNull().unique(),
+  expiresAt: ts('expires_at').notNull(),
+  usedAt: ts('used_at'),
+  createdAt: ts('created_at').notNull().defaultNow(),
+});
+
+export const webSessions = pgTable(
+  'web_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: ts('created_at').notNull().defaultNow(),
+    lastSeenAt: ts('last_seen_at').notNull(),
+    expiresAt: ts('expires_at').notNull(), // slides forward with use (idle timeout)
+    revokedAt: ts('revoked_at'),
+  },
+  (t) => [index('web_sessions_user_idx').on(t.userId)],
+);

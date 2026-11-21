@@ -73,9 +73,29 @@ export interface GenerationsStore {
   listByUser(userId: string): Promise<Generation[]>;
 }
 
+/**
+ * Browser sign-in. Only hashes are stored. Times come from the caller (one clock per
+ * request), so expiry is decided the same way on both backends.
+ */
+export interface WebSessionsStore {
+  createCode(userId: string, codeHash: string, expiresAt: Date): Promise<void>;
+  /** Marks the code used and returns its user, atomically: a code works once, before it expires. */
+  redeemCode(codeHash: string, now: Date): Promise<{ userId: string } | null>;
+  createSession(userId: string, tokenHash: string, now: Date, expiresAt: Date): Promise<{ id: string }>;
+  /** A session that is not revoked and not expired at `now`. */
+  findActiveSession(tokenHash: string, now: Date): Promise<{ id: string; userId: string; lastSeenAt: Date } | null>;
+  /** Records use and moves the idle expiry forward. */
+  touchSession(id: string, now: Date, expiresAt: Date): Promise<void>;
+  /** True if the session was active and is now revoked. */
+  revokeSession(tokenHash: string, now: Date): Promise<boolean>;
+  /** Removes codes and sessions that ended before `before` (housekeeping). */
+  deleteExpired(before: Date): Promise<void>;
+}
+
 export interface Storage {
   users: UsersStore;
   apiKeys: ApiKeysStore;
+  webSessions: WebSessionsStore;
   conversations: ConversationsStore;
   messages: MessagesStore;
   generations: GenerationsStore;

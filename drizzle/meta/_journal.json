@@ -22,6 +22,13 @@
       "when": 1791716977121,
       "tag": "0002_conversations_updated_at_ms",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795189788481,
+      "tag": "0003_pale_spectrum",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,9 @@
   "security": [
     {
       "apiKey": []
+    },
+    {
+      "webSession": []
     }
   ],
   "tags": [
@@ -27,6 +30,9 @@
     },
     {
       "name": "operations"
+    },
+    {
+      "name": "web"
     },
     {
       "name": "health"
@@ -108,6 +114,35 @@
         }
       }
     },
+    "/": {
+      "get": {
+        "operationId": "get",
+        "summary": "The web chat page",
+        "description": "Served with a strict Content-Security-Policy (only the gateway's own scripts and styles). Its files are under /assets/.",
+        "tags": [
+          "web"
+        ],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The page",
+            "content": {
+              "text/html": {}
+            }
+          },
+          "404": {
+            "description": "The page hasn't been built (`page_not_built`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/openapi.json": {
       "get": {
         "operationId": "getOpenapiJson",
@@ -145,7 +180,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -187,7 +222,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -238,7 +273,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -323,7 +358,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -364,7 +399,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -406,7 +441,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -437,6 +472,157 @@
           },
           "500": {
             "description": "The backup could not be written or verified (`backup_failed`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/web/codes": {
+      "post": {
+        "operationId": "postV1WebCodes",
+        "summary": "Make a one-time sign-in code for the web page (used by `llm open`)",
+        "description": "API key only: a signed-in browser cannot make codes. The code works once, for 60 seconds.",
+        "tags": [
+          "web"
+        ],
+        "security": [
+          {
+            "apiKey": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "A code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebCode"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Called with a session cookie instead of an API key (`key_required`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests for this key (`rate_limited`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/web/session": {
+      "post": {
+        "operationId": "postWebSession",
+        "summary": "Exchange a sign-in code for a session cookie",
+        "description": "Sets an HttpOnly, SameSite=Strict cookie. Refused for a host other than localhost (or `WEB_HOSTS`), and for an `Origin` other than the gateway itself.",
+        "tags": [
+          "web"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 16,
+                    "maxLength": 200,
+                    "description": "The one-time code from the sign-in link"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Signed in: the session cookie is set"
+          },
+          "400": {
+            "description": "Invalid request (`invalid_request`, with `details`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The code is unknown, used or expired (`invalid_code`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Wrong host or origin (`forbidden_host`, `bad_origin`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWebSession",
+        "summary": "Sign out: end the session and clear the cookie",
+        "tags": [
+          "web"
+        ],
+        "security": [
+          {
+            "webSession": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Signed out"
+          },
+          "403": {
+            "description": "Wrong host or origin (`forbidden_host`, `bad_origin`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -502,7 +688,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -585,7 +771,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -671,7 +857,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -762,7 +948,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -826,7 +1012,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -928,7 +1114,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1037,7 +1223,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1225,7 +1411,7 @@
             }
           },
           "401": {
-            "description": "Missing, unknown or revoked API key (`invalid_api_key`)",
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -1274,6 +1460,12 @@
         "type": "http",
         "scheme": "bearer",
         "description": "An API key: `Authorization: Bearer llmgw_...`"
+      },
+      "webSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "llmgw_session",
+        "description": "The web page's session, from `POST /web/session`. State-changing requests must come from the gateway's own origin."
       }
     },
     "schemas": {
@@ -2016,6 +2208,25 @@
           "messages",
           "bytes",
           "createdAt"
+        ],
+        "additionalProperties": false
+      },
+      "WebCode": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "ISO 8601 time, UTC"
+          }
+        },
+        "required": [
+          "code",
+          "expiresAt"
         ],
         "additionalProperties": false
       },

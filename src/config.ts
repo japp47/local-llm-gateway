@@ -26,6 +26,8 @@ const Env = z.object({
   RESERVE_OUTPUT_TOKENS: z.coerce.number().int().positive().default(800),
   MAX_HISTORY_MESSAGES: z.coerce.number().int().positive().default(100),
   LEASE_SECONDS: z.coerce.number().int().positive().default(180),
+  // Extra host names the web page may be reached by (comma-separated), beyond localhost.
+  WEB_HOSTS: optionalString,
 });
 
 const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -55,6 +57,7 @@ export function createConfig(env: Env = process.env) {
     ...e,
     mode,
     dataDir: e.DATA_DIR ?? defaultDataDir(process.platform, env),
+    webHosts: e.WEB_HOSTS ? list(e.WEB_HOSTS) : [],
     /** `undefined` means "discover from Ollama" (single-user mode only). */
     models: {
       allowed: e.ALLOWED_MODELS ? list(e.ALLOWED_MODELS) : fallback ? [fallback] : undefined,

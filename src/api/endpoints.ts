@@ -19,6 +19,8 @@ export interface Endpoint {
   description?: string;
   tag: string;
   auth: boolean;
+  /** Which credentials work, when not both (default for `auth: true`: API key or session cookie). */
+  authBy?: Array<'apiKey' | 'cookie'>;
   params?: z.ZodObject;
   query?: z.ZodObject;
   body?: z.ZodType;
@@ -32,7 +34,7 @@ const err = (description: string): ResponseSpec => ({ description, schema: S.Err
 
 /** Errors any authenticated endpoint can return. */
 const AUTH_ERRORS = {
-  401: err('Missing, unknown or revoked API key (`invalid_api_key`)'),
+  401: err('Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)'),
   429: err('Too many requests for this key (`rate_limited`)'),
 };
 const NOT_FOUND = { 404: err('No such conversation for this key (`conversation_not_found`)') };
@@ -58,6 +60,15 @@ export const ENDPOINTS: Endpoint[] = [
     method: 'get', path: '/metrics', tag: 'health', auth: false,
     summary: 'Prometheus metrics',
     responses: { 200: { description: 'Prometheus text format', contentType: 'text/plain' } },
+  },
+  {
+    method: 'get', path: '/', tag: 'web', auth: false,
+    summary: 'The web chat page',
+    description: 'Served with a strict Content-Security-Policy (only the gateway\'s own scripts and styles). Its files are under /assets/.',
+    responses: {
+      200: { description: 'The page', contentType: 'text/html' },
+      404: err("The page hasn't been built (`page_not_built`)"),
+    },
   },
   {
     method: 'get', path: '/openapi.json', tag: 'health', auth: false,
@@ -103,6 +114,37 @@ export const ENDPOINTS: Endpoint[] = [
       409: err('Server mode: use Postgres tools (`backup_failed`, with a pg_dump hint)'),
       500: err('The backup could not be written or verified (`backup_failed`)'),
     },
+  },
+
+  // ---- web sign-in ----
+  {
+    method: 'post', path: '/v1/web/codes', tag: 'web', auth: true, authBy: ['apiKey'],
+    summary: 'Make a one-time sign-in code for the web page (used by `llm open`)',
+    description: 'API key only: a signed-in browser cannot make codes. The code works once, for 60 seconds.',
+    responses: {
+      201: { description: 'A code', schema: S.WebCode },
+      ...AUTH_ERRORS,
+      403: err('Called with a session cookie instead of an API key (`key_required`)'),
+    },
+  },
+  {
+    method: 'post', path: '/web/session', tag: 'web', auth: false,
+    summary: 'Exchange a sign-in code for a session cookie',
+    description:
+      'Sets an HttpOnly, SameSite=Strict cookie. Refused for a host other than localhost (or `WEB_HOSTS`), ' +
+      'and for an `Origin` other than the gateway itself.',
+    body: S.RedeemCodeBody,
+    responses: {
+      204: { description: 'Signed in: the session cookie is set' },
+      ...INVALID,
+      401: err('The code is unknown, used or expired (`invalid_code`)'),
+      403: err('Wrong host or origin (`forbidden_host`, `bad_origin`)'),
+    },
+  },
+  {
+    method: 'delete', path: '/web/session', tag: 'web', auth: true, authBy: ['cookie'],
+    summary: 'Sign out: end the session and clear the cookie',
+    responses: { 204: { description: 'Signed out' }, 403: err('Wrong host or origin (`forbidden_host`, `bad_origin`)') },
   },
 
   // ---- conversations ----

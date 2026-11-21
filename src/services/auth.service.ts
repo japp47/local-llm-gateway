@@ -3,7 +3,10 @@ import type { ApiKeysStore } from '../storage/index.js';
 
 export interface AuthContext {
   userId: string;
+  /** Rate-limit identity: the API key id, or `session:<id>` for a browser session. */
   keyId: string;
+  /** How the caller proved who they are. Some actions need a key (e.g. making sign-in codes). */
+  via?: 'key' | 'session';
 }
 
 export class AuthService {

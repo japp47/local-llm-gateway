@@ -102,3 +102,27 @@ export const generations = sqliteTable(
     index('generations_request_idx').on(t.requestId),
   ],
 );
+
+// Browser sign-in (web chat). Mirrors the Postgres tables; only hashes are stored.
+export const webCodes = sqliteTable('web_codes', {
+  id: id(),
+  userId: text('user_id').notNull().references(() => users.id),
+  codeHash: text('code_hash').notNull().unique(),
+  expiresAt: ms('expires_at').notNull(),
+  usedAt: ms('used_at'),
+  createdAt: createdAt(),
+});
+
+export const webSessions = sqliteTable(
+  'web_sessions',
+  {
+    id: id(),
+    userId: text('user_id').notNull().references(() => users.id),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: createdAt(),
+    lastSeenAt: ms('last_seen_at').notNull(),
+    expiresAt: ms('expires_at').notNull(), // slides forward with use (idle timeout)
+    revokedAt: ms('revoked_at'),
+  },
+  (t) => [index('web_sessions_user_idx').on(t.userId)],
+);

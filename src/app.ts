@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { totalmem } from 'node:os';
+import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import Fastify from 'fastify';
 import { Redis } from 'ioredis';
@@ -37,6 +38,10 @@ import { meRoutes } from './routes/me.js';
 import { statsRoutes } from './routes/stats.js';
 import { doctorRoutes } from './routes/doctor.js';
 import { backupRoutes } from './routes/backup.js';
+import { webCodeRoutes, webSessionRoutes } from './routes/web-session.js';
+import { webPageRoutes } from './routes/web-page.js';
+import { findWebRoot } from './lib/web-root.js';
+import { WebSessionService } from './services/web-session.service.js';
 
 export interface Deps {
   config: config;
@@ -47,6 +52,7 @@ export interface Deps {
   /** Model metadata from Ollama (installed, loaded). Used for model discovery and diagnostics. */
   ollama: OllamaInfo;
   auth: AuthService;
+  webSessions: WebSessionService;
   conversations: ConversationService;
   models: ModelsService;
   repos: {
@@ -64,6 +70,8 @@ export interface BuildOptions {
   storage?: Storage;
   /** Tests: stand-ins for Ollama's metadata API and this machine's memory. */
   ollama?: OllamaInfo;
+  /** Where the built web page is; null = no page. Default: dist/web, found from this file. */
+  webRoot?: string | null;
   totalMemoryBytes?: number;
 }
 
@@ -139,6 +147,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   const provider = opts.provider ?? new OllamaProvider(config.OLLAMA_URL);
   const ollama = opts.ollama ?? new OllamaModels(config.OLLAMA_URL);
   const auth = new AuthService(repos.apiKeys);
+  const webSessions = new WebSessionService(storage.webSessions);
   const models = new ModelsService({
     ...config.models,
     source: ollama,
@@ -160,7 +169,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     messages: repos.messages,
     generations: repos.generations,
   });
-  const deps: Deps = { config, storage, limiter, metrics, provider, ollama, auth, conversations, models, repos };
+  const deps: Deps = { config, storage, limiter, metrics, provider, ollama, auth, webSessions, conversations, models, repos };
 
   let redis: Redis | null = null;
   if (config.REDIS_URL) {
@@ -170,6 +179,21 @@ export async function buildApp(opts: BuildOptions = {}) {
       enableOfflineQueue: false, // fail fast if Redis is down
     });
     redis.on('error', (e) => app.log.warn({ err: e.message }, 'redis error'));
+    // Wait briefly for the connection, so limits apply from the first request. Without this,
+    // requests that arrive before Redis is ready skip the limit (skipOnError below). If Redis
+    // is down, start anyway after 1 s: serving beats refusing.
+    const client = redis;
+    if (client.status !== 'ready') {
+      await new Promise<void>((done) => {
+        const timer = setTimeout(done, 1000);
+        const finish = () => {
+          clearTimeout(timer);
+          done();
+        };
+        client.once('ready', finish);
+        client.once('error', finish);
+      });
+    }
   }
   app.log.info(
     {
@@ -193,11 +217,14 @@ export async function buildApp(opts: BuildOptions = {}) {
   });
 
   // ---- routes ----
+  await app.register(cookie); // parses cookies for the web page's session (no signing: the token is random)
   await app.register(healthRoutes, { deps });
+  await app.register(webSessionRoutes, { deps });
+  await app.register(webPageRoutes, { root: opts.webRoot === undefined ? findWebRoot() : opts.webRoot });
 
   await app.register(
     async (v1) => {
-      v1.addHook('onRequest', makeAuthHook(auth)); // auth first, so rate limiting can key on the key id
+      v1.addHook('onRequest', makeAuthHook(auth, webSessions, config.webHosts)); // auth first, so rate limiting can key on the key id
       await v1.register(rateLimit, {
         max: config.RATE_LIMIT_MAX,
         timeWindow: config.RATE_LIMIT_WINDOW,
@@ -213,6 +240,7 @@ export async function buildApp(opts: BuildOptions = {}) {
       await v1.register(statsRoutes, { deps });
       await v1.register(doctorRoutes, { deps });
       await v1.register(backupRoutes, { deps });
+      await v1.register(webCodeRoutes, { deps });
     },
     { prefix: '/v1' },
   );

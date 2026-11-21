@@ -53,7 +53,7 @@ function operation(e: Endpoint): Json {
     ...(e.description ? { description: e.description } : {}),
     tags: [e.tag],
     ...(e.deprecated ? { deprecated: true } : {}),
-    ...(e.auth ? {} : { security: [] }),
+    ...(!e.auth ? { security: [] } : e.authBy ? { security: e.authBy.map((a) => ({ [a === 'cookie' ? 'webSession' : 'apiKey']: [] })) } : {}),
     ...(e.params || e.query ? { parameters: [...parameters('path', e.params), ...parameters('query', e.query)] } : {}),
     ...(e.body ? { requestBody: { required: true, content: { 'application/json': { schema: schemaFor(e.body, 'input') } } } } : {}),
     responses,
@@ -76,12 +76,13 @@ export function buildOpenApi(version = '1.0.0'): Json {
         '`code` is stable for programs, `message` and `hint` are written for people.',
     },
     servers: [{ url: 'http://localhost:3000' }],
-    security: [{ apiKey: [] }],
+    security: [{ apiKey: [] }, { webSession: [] }],
     tags: [
       { name: 'conversations' },
       { name: 'models' },
       { name: 'account' },
       { name: 'operations' },
+      { name: 'web' },
       { name: 'health' },
       { name: 'legacy' },
     ],
@@ -89,6 +90,12 @@ export function buildOpenApi(version = '1.0.0'): Json {
     components: {
       securitySchemes: {
         apiKey: { type: 'http', scheme: 'bearer', description: 'An API key: `Authorization: Bearer llmgw_...`' },
+        webSession: {
+          type: 'apiKey',
+          in: 'cookie',
+          name: 'llmgw_session',
+          description: 'The web page\'s session, from `POST /web/session`. State-changing requests must come from the gateway\'s own origin.',
+        },
       },
       schemas: Object.fromEntries(Object.entries(schemas).map(([id, s]) => [id, clean(s)])),
     },

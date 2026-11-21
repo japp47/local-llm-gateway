@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { buildApp, type Deps } from '../src/app.js';
 import { createConfig } from '../src/config.js';
@@ -6,6 +7,9 @@ import type { ChatEvent, ChatRequest, LLMProvider, ProviderError } from '../src/
 import type { Storage } from '../src/storage/index.js';
 import { createPostgresStorage } from '../src/storage/postgres/index.js';
 import { createSqliteStorage } from '../src/storage/sqlite/index.js';
+
+/** A tiny stand-in for the built web page, so tests don't depend on `npm run build:web`. */
+export const FIXTURE_WEB_ROOT = fileURLToPath(new URL('./fixtures/web', import.meta.url));
 
 export const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ?? 'postgres://llmgw:llmgw@127.0.0.1:5432/llmgw_test';
@@ -98,7 +102,7 @@ export async function makeTestApp(
     DEFAULT_MODEL: 'fake-model',
     ...env,
   });
-  const { app, deps, routes } = await buildApp({ config, provider, storage });
+  const { app, deps, routes } = await buildApp({ config, provider, storage, webRoot: FIXTURE_WEB_ROOT });
 
   return {
     app,

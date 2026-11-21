@@ -64,6 +64,7 @@ export const StatsQuery = z.object({
   hours: z.coerce.number().int().min(1).max(720).default(24),
   recent: z.coerce.number().int().min(0).max(50).default(5),
 });
+export const RedeemCodeBody = z.object({ code: z.string().min(16).max(200).describe('The one-time code from the sign-in link') });
 export const LegacyChatBody = z.object({
   model: z.string(),
   messages: z
@@ -190,6 +191,12 @@ export const BackupSummary = named(
     createdAt: timestamp,
   }),
   'BackupSummary',
+);
+
+export const WebCode = named(
+  z.strictObject({ code: z.string(), expiresAt: timestamp }),
+  'WebCode',
+  'A one-time sign-in code for the web page; works once, for 60 seconds',
 );
 
 export const Health = named(z.strictObject({ ok: z.literal(true), mode: z.enum(['single', 'server']) }), 'Health');

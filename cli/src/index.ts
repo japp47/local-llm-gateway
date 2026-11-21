@@ -6,6 +6,7 @@ import { configPathCommand, configSetCommand, configShowCommand, modelsCommand, 
 import { backupCommand, restoreCommand } from './commands/backup.js';
 import { doctorCommand } from './commands/doctor.js';
 import { startCommand } from './commands/start.js';
+import { openCommand } from './commands/open.js';
 import { CliError } from './errors.js';
 import { describeErrorFully } from './key-diagnosis.js';
 import { errc } from './format.js';
@@ -97,6 +98,12 @@ program
   .option('--recent <n>', 'recent generations to list', '5')
   .option('--json', 'machine-readable output')
   .action(wrap(statsCommand));
+
+program
+  .command('open')
+  .description('open the web chat in your browser, already signed in')
+  .option('--print', "print the sign-in link instead of opening the browser")
+  .action(wrap(openCommand));
 
 program
   .command('start')

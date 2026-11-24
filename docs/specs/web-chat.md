@@ -1,6 +1,8 @@
 # Spec: web chat page
 
-Status: decided 2026-11-20 (React + Vite, sign-in by `llm open` link, core + extras). Step 2 of "Next up" in the roadmap
+Status: built 2026-11-24, shipping in 0.2.0 (React + Vite, sign-in by `llm open` link, core + extras).
+Not in it: regenerating a different answer to the same question ("Branch from here" copies
+the history and you continue by typing); that needs a regenerate endpoint (roadmap Phase 2). Step 2 of "Next up" in the roadmap
 (Phase 1). It does not wait for the wedge decision: every wedge needs a chat that is not a
 terminal, and phone access (step 3) is built on this page.
 

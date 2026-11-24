@@ -24,9 +24,14 @@ get, for example `ollama pull qwen3:8b`. `llm start` keeps running in that windo
 stops it.
 
 ```bash
-# 3. In a second window
+# 3. In a second window: chat in your browser...
+llm open
+# ...or in the terminal
 llm chat "hello"
 ```
+
+`llm open` opens the chat page at `http://localhost:3000`, already signed in. Only your
+browser on this computer can use that sign-in: other websites can't.
 
 To try it without installing: `npx local-llm-gateway` starts the assistant, and
 `npx -p local-llm-gateway llm chat "hello"` chats from a second window.
@@ -44,7 +49,8 @@ fix whatever is wrong.
 
 | Command | What it does |
 | --- | --- |
-| `llm chat` | Talk (interactive). `llm chat "question"` asks once |
+| `llm open` | Chat in your browser (opens already signed in) |
+| `llm chat` | Talk in the terminal. `llm chat "question"` asks once |
 | `llm ls`, `llm show <id>`, `llm resume <id>` | Your conversations |
 | `llm fork <id>` | Try another way from an earlier answer |
 | `llm models` | Downloaded models; `*` marks the one in use |

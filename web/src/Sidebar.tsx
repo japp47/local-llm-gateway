@@ -9,6 +9,7 @@ interface Props {
   onNew(): void;
   onMore(): void;
   onSignOut(): void;
+  onBackup(): void;
 }
 
 export function Sidebar(p: Props) {
@@ -38,6 +39,9 @@ export function Sidebar(p: Props) {
           Load more
         </button>
       )}
+      <button type="button" className="ghost backup" onClick={p.onBackup} title="Save a copy of all conversations">
+        Back up
+      </button>
       <div className="account">
         <span className="muted" title={p.email}>{p.email}</span>
         <button type="button" className="ghost" onClick={p.onSignOut}>

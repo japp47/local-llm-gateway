@@ -66,6 +66,19 @@ ok "llm doctor: gateway, key and database ok; explains that Ollama is down"
 curl -sf "$LLM_BASE_URL/openapi.json" | grep -q '"openapi": *"3.1.0"' || fail "/openapi.json"
 ok "/openapi.json served"
 
+step "The web page and browser sign-in"
+page_headers=$(curl -sf -D - -o "$WORK/page.html" "$LLM_BASE_URL/")
+echo "$page_headers" | grep -qi "content-security-policy: default-src 'self'; script-src 'self'" || fail "the page has a strict Content-Security-Policy"
+asset=$(grep -o '/assets/[^"]*\.js' "$WORK/page.html" | head -1)
+[ -n "$asset" ] && curl -sf -o /dev/null "$LLM_BASE_URL$asset" || fail "the page's script loads"
+ok "the page and its files are served, with a strict Content-Security-Policy"
+code=$("$LLM" open --print | grep -o 'code=[^ ]*' | cut -d= -f2)
+[ -n "$code" ] || fail "llm open --print gives a sign-in link"
+curl -sf -c "$WORK/jar" -o /dev/null -X POST -H "origin: $LLM_BASE_URL" -H 'content-type: application/json' \
+  -d "{\"code\":\"$code\"}" "$LLM_BASE_URL/web/session" || fail "the sign-in link signs the browser in"
+curl -sf -b "$WORK/jar" "$LLM_BASE_URL/v1/me" | grep -q "local@localhost" || fail "the session cookie works"
+ok "llm open: the one-time link signs the browser in"
+
 step "Backup, stop, restore"
 BACKUP=$("$LLM" backup --json | sed -n 's/.*"file": "\(.*\)".*/\1/p')
 [ -f "$BACKUP" ] || fail "llm backup wrote a file"

@@ -19,6 +19,9 @@ export function App() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [detail, setDetail] = useState<ConversationWithMessages | null>(null);
   const [defaultModel, setDefaultModel] = useState<string | null>(null);
+  const [models, setModels] = useState<string[]>([]);
+  /** The model for the next message; follows the open conversation's model. */
+  const [model, setModel] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const abort = useRef<AbortController | null>(null);
   const started = useRef(false); // React's StrictMode runs effects twice in development
@@ -53,13 +56,16 @@ export function App() {
       setPhase('ready');
       loadList().catch((err) => setProblem(asProblem(err)));
       api.defaultModel().then((m) => setDefaultModel(m.id), (err) => setProblem(asProblem(err)));
+      api.models().then((m) => setModels(m.data.map((x) => x.id)), () => {}); // the banner above already explains failures
     })();
   }, [loadList]);
 
   const open = useCallback(async (id: string) => {
     setActiveId(id);
     try {
-      setDetail(await api.conversation(id));
+      const d = await api.conversation(id);
+      setDetail(d);
+      setModel(d.defaultModel);
     } catch (err) {
       setProblem(asProblem(err));
     }
@@ -68,6 +74,7 @@ export function App() {
   const newChat = () => {
     setActiveId(null);
     setDetail(null);
+    setModel(null); // back to the gateway's default
   };
 
   /** Returns false when nothing was sent, so the composer keeps the text. */
@@ -76,7 +83,7 @@ export function App() {
     let id = activeId;
     try {
       if (!id) {
-        const created = await api.create({});
+        const created = await api.create(model ? { model } : {});
         id = created.id;
         setActiveId(id);
       }
@@ -90,7 +97,7 @@ export function App() {
     setStreaming({ question: content, answer: '' });
     let sent = true;
     try {
-      await api.send(id, content, { signal: controller.signal }, {
+      await api.send(id, content, { model: model ?? undefined, signal: controller.signal }, {
         onDelta: (text) => setStreaming((s) => (s ? { ...s, answer: s.answer + text } : s)),
         onError: (err) => setProblem(asProblem(err)),
       });
@@ -123,6 +130,28 @@ export function App() {
       await api.remove(activeId);
       newChat();
       await loadList();
+    } catch (err) {
+      setProblem(asProblem(err));
+    }
+  };
+
+  const backup = async () => {
+    try {
+      const b = await api.backup();
+      setProblem({ tone: 'info', message: `Saved a backup of ${b.conversations} conversations.`, hint: b.file });
+    } catch (err) {
+      setProblem(asProblem(err)); // server mode explains it uses Postgres tools instead
+    }
+  };
+
+  /** A new conversation with the history up to this message; the original stays as it is. */
+  const branch = async (messageId: string) => {
+    if (!activeId) return;
+    try {
+      const fork = await api.fork(activeId, messageId);
+      await loadList();
+      await open(fork.id);
+      setProblem({ tone: 'info', message: 'Branched into a new conversation. The original is unchanged.' });
     } catch (err) {
       setProblem(asProblem(err));
     }
@@ -170,6 +199,7 @@ export function App() {
         onNew={newChat}
         onMore={loadMore}
         onSignOut={signOut}
+        onBackup={backup}
       />
       <main className="main">
         {problem && <Banner problem={problem} onClose={() => setProblem(null)} />}
@@ -177,6 +207,10 @@ export function App() {
           key={activeId ?? 'new'}
           detail={detail}
           defaultModel={defaultModel}
+          models={models}
+          model={model}
+          onModelChange={setModel}
+          onBranch={branch}
           streaming={streaming}
           onSend={send}
           onStop={() => abort.current?.abort()}

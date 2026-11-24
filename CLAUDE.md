@@ -101,6 +101,16 @@ modes (`test:int` and `test:int:sqlite`); `bash scripts/e2e.sh` for anything end
   and served at `/openapi.json`. Adding or changing an endpoint: update both files, run
   `npm run openapi`; `test/contract.int.test.ts` checks real responses against the document
   and that every registered route is documented.
+- Web chat (`docs/specs/web-chat.md`): React + Vite in `web/` (types imported from
+  `src/api/schemas.ts`), built to `dist/web`, served at `/` + `/assets/*` by
+  `routes/web-page.ts` with a strict CSP (no inline code). Model output is rendered by
+  `web/src/markdown.tsx` as React elements, never HTML. `npm run dev:web` (Vite on :5173,
+  proxy keeps Host/Origin). Browser sign-in: `llm open` -> `POST /v1/web/codes` (API key
+  only) -> `/#code=` -> `POST /web/session` sets an HttpOnly SameSite=Strict cookie
+  (`web_codes`/`web_sessions` tables, hashes only, `services/web-session.service.ts`). The
+  auth hook accepts a Bearer key or the cookie; cookie requests must pass the Host check
+  (loopback or `WEB_HOSTS`) and, when they change state, the Origin check
+  (`plugins/web-guard.ts`). Tests pass `webRoot` = `test/fixtures/web`.
 - CLI: `cli/src/config.ts` (profiles and precedence: env > active profile > legacy flat
   keys), `commands/`, `api/client.ts`. Config file path: `llm config path`.
 
@@ -161,7 +171,8 @@ Phases:
 - 0 Stabilize: DONE (CLI credential safety, transcript paging, `/v1/stats`, integration
   tests, CI runs CLI checks).
 - 1 One-click app (IN PROGRESS: 1a DONE, gate passed 2026-11-20). Next, in order and not
-  waiting for the wedge: npm package, web chat page, phone access v1 (moved up from Phase 5).
+  waiting for the wedge: npm package (done, 0.1.x), web chat page (done, 0.2.0), phone
+  access v1 next (moved up from Phase 5).
   Surveys point to wedge B (small professional firms); interviews with CAs to confirm. 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
   limiting instead of Postgres/Redis, zero-config first run, model auto-picked by RAM,
   `llm doctor` diagnostics, tested `llm backup`/`llm restore`, OpenAPI from zod schemas,

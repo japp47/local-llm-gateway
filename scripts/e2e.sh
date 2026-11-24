@@ -188,8 +188,23 @@ shared_features() {
 }
 
 cli_features() {
+  bold "[$MODE] Web chat: browser sign-in and a streamed answer"
+  local out code conv jar="$WORK/jar-$MODE"
+  curl -s -D "$HDRS" -o /dev/null "$BASE/"; check "the page has a strict Content-Security-Policy" grep -qi "content-security-policy: default-src 'self'" "$HDRS"
+  cmd "llm open --print"; code=$(node cli/dist/index.js open --print 2>&1 | grep -o 'code=[^ ]*' | cut -d= -f2)
+  check "llm open gives a one-time link" test -n "$code"
+  out=$(curl -s -c "$jar" -o /dev/null -w '%{http_code}' -X POST -H "origin: $BASE" -H 'content-type: application/json' -d "{\"code\":\"$code\"}" "$BASE/web/session")
+  check "the link signs the browser in (204)" is "$out" 204
+  out=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "origin: $BASE" -H 'content-type: application/json' -d "{\"code\":\"$code\"}" "$BASE/web/session")
+  check "the same link a second time -> 401" is "$out" 401
+  conv=$(curl -s -b "$jar" -X POST -H "origin: $BASE" -H 'content-type: application/json' -d '{}' "$BASE/v1/conversations" | jq -r .id)
+  curl -s -N -m 180 -b "$jar" -X POST -H "origin: $BASE" -H 'content-type: application/json' \
+    -d '{"content":"Reply with exactly: web works"}' "$BASE/v1/conversations/$conv/messages" > "$WORK/web-sse"
+  check "a browser session streams a real answer" grep -q '"status":"complete"' "$WORK/web-sse"
+  out=$(curl -s -o /dev/null -w '%{http_code}' -b "$jar" -X POST -H "origin: http://evil.example" -H 'content-type: application/json' -d '{}' "$BASE/v1/conversations")
+  check "the same cookie from another website -> 403" is "$out" 403
+
   bold "[$MODE] CLI"
-  local out
   out=$(llm whoami); echo "$out" | sed 's/^/    /'; check "llm whoami -> $EXPECT_EMAIL" has "$out" "$EXPECT_EMAIL"
   cmd "llm doctor --json"; out=$(node cli/dist/index.js doctor --json 2>&1); check "llm doctor --json: ok, database checked" bash -c 'jq -e ".ok and any(.checks[]; .id == \"database\" and .status == \"ok\")" <<<"$1" >/dev/null' _ "$out"
   if [ "$MODE" = server ]; then
@@ -253,7 +268,7 @@ check "doctor: all good, exit 0" bash -c "[ $code -eq 0 ] && grep -q 'All good' 
 check "doctor: gateway's own checks included (model, database)" has "$out" "The database (SQLite) is up to date"
 out=$(LLM_BASE_URL=http://localhost:9 node cli/dist/index.js doctor 2>&1); code=$?
 cmd "LLM_BASE_URL=http://localhost:9 llm doctor"
-check "doctor with the gateway down: exit 1, says how to start it" bash -c "[ $code -eq 1 ] && grep -q 'npm start' <<<\"\$1\"" _ "$out"
+check "doctor with the gateway down: exit 1, says how to start it" bash -c "[ $code -eq 1 ] && grep -qE '(llm|npm) start' <<<\"\$1\"" _ "$out"
 
 shared_features
 cli_features

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 (2026-11-24)
+
+- **Web chat.** `llm open` opens the assistant in your browser at `http://localhost:3000`,
+  already signed in: conversations, streaming answers with Stop, rename, delete, a model
+  picker, a Back up button, and "Branch from here" on any message. Problems show as a plain
+  banner with what to do. Light and dark mode.
+- Browser sign-in is a one-time link (60 seconds, works once) exchanged for an HttpOnly,
+  SameSite=Strict session cookie. Other websites can't use it: the gateway checks the Host
+  and Origin of every cookie request, and the page runs under a strict Content-Security-
+  Policy. Model answers are shown as text, never as HTML. API keys work as before.
+- The gateway waits up to a second for Redis at startup, so rate limits apply from the
+  first request (server mode).
+
 ## 0.1.1 (2026-11-20)
 
 - `npx local-llm-gateway` now starts the assistant (0.1.0 said "could not determine

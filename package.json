@@ -1,6 +1,6 @@
 {
   "name": "local-llm-gateway",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A private AI assistant on your own computer: a gateway in front of Ollama, with the `llm` terminal app.",
   "keywords": [
     "ollama",

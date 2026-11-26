@@ -13,3 +13,6 @@ export type ForkedConversation = z.infer<typeof S.ForkedConversation>;
 export type Message = z.infer<typeof S.Message>;
 export type MetaEvent = z.infer<typeof S.MetaEvent>;
 export type BackupSummary = z.infer<typeof S.BackupSummary>;
+export type Device = z.infer<typeof S.Device>;
+export type DeviceList = z.infer<typeof S.DeviceList>;
+export type PhoneInfo = z.infer<typeof S.PhoneInfo>;

@@ -30,15 +30,15 @@ describe('storage contract', () => {
     const t0 = new Date('2026-11-20T10:00:00.000Z');
     const at = (ms: number) => new Date(t0.getTime() + ms);
 
-    await store.createCode(a.userId, 'code-1', at(60_000));
-    expect(await store.redeemCode('code-1', at(1_000))).toEqual({ userId: a.userId });
+    await store.createCode(a.userId, 'code-1', at(60_000), 'open');
+    expect(await store.redeemCode('code-1', at(1_000))).toEqual({ userId: a.userId, purpose: 'open' });
     expect(await store.redeemCode('code-1', at(2_000))).toBeNull(); // used
     // Two redeems at the same moment: exactly one wins.
-    await store.createCode(a.userId, 'code-race', at(60_000));
+    await store.createCode(a.userId, 'code-race', at(60_000), 'open');
     const both = await Promise.all([store.redeemCode('code-race', at(1_000)), store.redeemCode('code-race', at(1_000))]);
     expect(both.filter(Boolean)).toHaveLength(1);
 
-    await store.createCode(a.userId, 'code-2', at(60_000));
+    await store.createCode(a.userId, 'code-2', at(60_000), 'open');
     expect(await store.redeemCode('code-2', at(60_000))).toBeNull(); // expired exactly at the deadline
     expect(await store.redeemCode('no-such-code', at(0))).toBeNull();
   });
@@ -49,8 +49,8 @@ describe('storage contract', () => {
     const t0 = new Date('2026-11-20T10:00:00.000Z');
     const at = (ms: number) => new Date(t0.getTime() + ms);
 
-    const { id } = await store.createSession(a.userId, 'tok-1', t0, at(1_000));
-    expect(await store.findActiveSession('tok-1', at(500))).toMatchObject({ id, userId: a.userId, lastSeenAt: t0 });
+    const { id } = await store.createSession(a.userId, 'tok-1', t0, at(1_000), { name: 'Mac', createdFrom: 'local' });
+    expect(await store.findActiveSession('tok-1', at(500))).toMatchObject({ id, userId: a.userId, lastSeenAt: t0, createdFrom: 'local' });
     expect(await store.findActiveSession('tok-1', at(1_000))).toBeNull(); // idle too long
     await store.touchSession(id, at(900), at(10_000));
     expect(await store.findActiveSession('tok-1', at(5_000))).toMatchObject({ lastSeenAt: at(900) });
@@ -59,10 +59,36 @@ describe('storage contract', () => {
     expect(await store.revokeSession('tok-1', at(6_000))).toBe(false); // already revoked
     expect(await store.findActiveSession('tok-1', at(6_001))).toBeNull();
 
-    await store.createSession(a.userId, 'tok-2', t0, at(1_000));
+    await store.createSession(a.userId, 'tok-2', t0, at(1_000), { name: null, createdFrom: 'network' });
     await store.deleteExpired(at(2_000));
     expect(await store.touchSession(id, at(7_000), at(8_000))).toBeUndefined(); // no row: a no-op
     expect(await store.findActiveSession('tok-2', at(500))).toBeNull(); // removed
+  });
+
+  it('devices: listed per user (most recent first), revoked by id only by their owner', async () => {
+    const a = await t.addUser('dev-a@example.com');
+    const b = await t.addUser('dev-b@example.com');
+    const store = t.deps.storage.webSessions;
+    const t0 = new Date('2026-11-24T10:00:00.000Z');
+    const at = (ms: number) => new Date(t0.getTime() + ms);
+
+    await store.createCode(a.userId, 'pair-1', at(300_000), 'pair');
+    expect(await store.redeemCode('pair-1', at(1_000))).toEqual({ userId: a.userId, purpose: 'pair' });
+
+    const mac = await store.createSession(a.userId, 'tok-mac', t0, at(60_000), { name: 'Mac', createdFrom: 'local' });
+    const phone = await store.createSession(a.userId, 'tok-phone', at(10), at(60_000), { name: 'iPhone', createdFrom: 'network' });
+    await store.createSession(b.userId, 'tok-b', t0, at(60_000), { name: 'Other', createdFrom: 'local' });
+
+    const list = await store.listSessions(a.userId, at(100));
+    expect(list.map((d) => [d.deviceName, d.createdFrom])).toEqual([['iPhone', 'network'], ['Mac', 'local']]);
+    expect(list[0]).toMatchObject({ id: phone.id, createdAt: expect.any(Date), lastSeenAt: at(10) });
+
+    expect(await store.revokeSessionById(b.userId, phone.id, at(200))).toBe(false); // not b's device
+    expect(await store.revokeSessionById(a.userId, phone.id, at(200))).toBe(true);
+    expect(await store.revokeSessionById(a.userId, phone.id, at(201))).toBe(false); // already removed
+    expect((await store.listSessions(a.userId, at(300))).map((d) => d.id)).toEqual([mac.id]);
+    expect(await store.findActiveSession('tok-phone', at(300))).toBeNull();
+    expect(await store.listSessions(a.userId, at(60_000))).toEqual([]); // all expired by then
   });
 
   it('reports a fully migrated database: every shipped migration applied', async () => {

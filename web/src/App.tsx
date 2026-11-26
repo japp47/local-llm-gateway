@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './api';
 import { Banner, type Problem } from './Banner';
 import { ChatView, type Streaming } from './ChatView';
+import { DevicesPanel } from './DevicesPanel';
 import { Sidebar } from './Sidebar';
 import type { Conversation, ConversationWithMessages, Me } from './types';
 
@@ -24,7 +25,11 @@ export function App() {
   const [model, setModel] = useState<string | null>(null);
   const [streaming, setStreaming] = useState<Streaming | null>(null);
   const abort = useRef<AbortController | null>(null);
-  const started = useRef(false); // React's StrictMode runs effects twice in development
+  const started = useRef(false);
+  const [showDevices, setShowDevices] = useState(false);
+  const [autoPair, setAutoPair] = useState(false); // llm phone --browser: show the QR at once
+  /** On a phone the conversation list is a drawer. */
+  const [drawerOpen, setDrawerOpen] = useState(false); // React's StrictMode runs effects twice in development
 
   const loadList = useCallback(async () => {
     const page = await api.conversations();
@@ -37,7 +42,8 @@ export function App() {
     if (started.current) return;
     started.current = true;
     (async () => {
-      const code = new URLSearchParams(location.hash.slice(1)).get('code');
+      const params = new URLSearchParams(location.hash.slice(1));
+      const code = params.get('code');
       if (code) {
         history.replaceState(null, '', location.pathname); // never leave the code in the address bar
         try {
@@ -54,6 +60,10 @@ export function App() {
         return setPhase('signedOut');
       }
       setPhase('ready');
+      if (params.get('show') === 'phone') {
+        setAutoPair(true); // llm phone --browser
+        setShowDevices(true);
+      }
       loadList().catch((err) => setProblem(asProblem(err)));
       api.defaultModel().then((m) => setDefaultModel(m.id), (err) => setProblem(asProblem(err)));
       api.models().then((m) => setModels(m.data.map((x) => x.id)), () => {}); // the banner above already explains failures
@@ -62,6 +72,7 @@ export function App() {
 
   const open = useCallback(async (id: string) => {
     setActiveId(id);
+    setDrawerOpen(false);
     try {
       const d = await api.conversation(id);
       setDetail(d);
@@ -72,6 +83,7 @@ export function App() {
   }, []);
 
   const newChat = () => {
+    setDrawerOpen(false);
     setActiveId(null);
     setDetail(null);
     setModel(null); // back to the gateway's default
@@ -181,15 +193,27 @@ export function App() {
       <div className="center signed-out">
         {problem && <Banner problem={problem} onClose={() => setProblem(null)} />}
         <h1>Your private assistant</h1>
-        <p>To sign in, run this in a terminal:</p>
+        <p>On the computer running it, sign in with:</p>
         <pre className="code"><code>llm open</code></pre>
-        <p className="muted">It opens this page already signed in. Nothing you type here leaves this computer.</p>
+        <p>On a phone: scan the QR code from <code>llm phone</code> (or "Phones &amp; devices" on the computer).</p>
+        <p className="muted">Your conversations stay on that computer.</p>
       </div>
     );
   }
 
   return (
-    <div className="layout">
+    <div className={drawerOpen ? 'layout drawer-open' : 'layout'}>
+      {drawerOpen && <div className="scrim" onClick={() => setDrawerOpen(false)} aria-hidden="true" />}
+      {showDevices && (
+        <DevicesPanel
+          autoPair={autoPair}
+          onClose={() => {
+            setShowDevices(false);
+            setAutoPair(false);
+          }}
+          onSignedOut={() => void signOut()}
+        />
+      )}
       <Sidebar
         conversations={conversations}
         activeId={activeId}
@@ -200,6 +224,10 @@ export function App() {
         onMore={loadMore}
         onSignOut={signOut}
         onBackup={backup}
+        onDevices={() => {
+          setDrawerOpen(false);
+          setShowDevices(true);
+        }}
       />
       <main className="main">
         {problem && <Banner problem={problem} onClose={() => setProblem(null)} />}
@@ -211,6 +239,7 @@ export function App() {
           model={model}
           onModelChange={setModel}
           onBranch={branch}
+          onMenu={() => setDrawerOpen(true)}
           streaming={streaming}
           onSend={send}
           onStop={() => abort.current?.abort()}

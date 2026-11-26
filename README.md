@@ -58,6 +58,28 @@ fix whatever is wrong.
 | `llm backup` | Save a copy of all conversations |
 | `llm restore <file>` | How to put a backup back |
 | `llm stats` | Speed and token use |
+| `llm phone` | Connect a phone: shows a QR code to scan |
+| `llm devices` | Signed-in browsers and phones; `llm devices revoke <id>` removes one |
+
+### Use it from your phone
+
+No app needed: the phone opens the same chat page in its browser, and your conversations
+are the same on both.
+
+```bash
+llm start --phone     # also lets phones on this Wi-Fi connect
+llm phone             # shows a QR code: scan it with the phone's camera (works once, 5 minutes)
+llm phone --browser   # the same QR code on a web page, if the terminal one won't scan
+```
+
+- **Same Wi-Fi** (at home): the connection is not encrypted, so use it only on a Wi-Fi you
+  trust. Guest and many office networks block devices from reaching each other.
+- **Anywhere, encrypted**: install [Tailscale](https://tailscale.com) on the computer and the
+  phone, then run `tailscale serve --bg 3000`. `llm phone` then uses the Tailscale address.
+  The assistant itself never opens a port on your network.
+- **Lost a phone, or someone left?** `llm devices revoke <id>`, or **Phones & devices** in the
+  page on the computer. It is signed out at once. A phone can never pair other phones.
+- The computer has to be awake and running the assistant.
 
 ### Where your data is
 

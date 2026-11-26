@@ -111,6 +111,17 @@ modes (`test:int` and `test:int:sqlite`); `bash scripts/e2e.sh` for anything end
   auth hook accepts a Bearer key or the cookie; cookie requests must pass the Host check
   (loopback or `WEB_HOSTS`) and, when they change state, the Origin check
   (`plugins/web-guard.ts`). Tests pass `webRoot` = `test/fixtures/web`.
+- Phone access (`docs/specs/phone-access.md`): `web_codes.purpose` ('open': 60 s, only
+  redeemable from this computer; 'pair': 5 min, for phones), `web_sessions.device_name` and
+  `created_from` ('local' | 'network'). `lib/network.ts`: `isLocalRequest` (127.0.0.1 AND a
+  loopback Host AND no forwarding headers, so `tailscale serve` traffic counts as network),
+  `requestHost`/`requestProtocol` (forwarded values trusted only from loopback), `WebHosts`
+  (allow-list: LAN IPv4s, `<hostname>.local`, Tailscale name, `WEB_HOSTS`; tests pass
+  `networkHosts`). Pairing codes and removing other devices: API key or a local session on
+  this computer only (`onThisComputer` in `routes/web-session.ts`). `PHONE_ACCESS=wifi`
+  (`llm start --phone`) makes single-user mode listen on 0.0.0.0 (`listenHost` in
+  `config.ts`); a single-user network guard in `app.ts` allows only `/`, `/assets/*`,
+  `/web/session`, `/v1/*`, `/healthz` from the network. CLI: `llm phone`, `llm devices`.
 - CLI: `cli/src/config.ts` (profiles and precedence: env > active profile > legacy flat
   keys), `commands/`, `api/client.ts`. Config file path: `llm config path`.
 
@@ -172,7 +183,8 @@ Phases:
   tests, CI runs CLI checks).
 - 1 One-click app (IN PROGRESS: 1a DONE, gate passed 2026-11-20). Next, in order and not
   waiting for the wedge: npm package (done, 0.1.x), web chat page (done, 0.2.0), phone
-  access v1 next (moved up from Phase 5).
+  access v1 (done, 0.3.0; real-phone/Tailscale check pending). USP thinking:
+  `docs/research/usp.md` (privacy receipt next is cheap).
   Surveys point to wedge B (small professional firms); interviews with CAs to confirm. 1a single-user engine: SQLite (better-sqlite3, decided by spike) and in-process rate
   limiting instead of Postgres/Redis, zero-config first run, model auto-picked by RAM,
   `llm doctor` diagnostics, tested `llm backup`/`llm restore`, OpenAPI from zod schemas,

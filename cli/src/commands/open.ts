@@ -15,10 +15,11 @@ export function browserCommand(url: string, platform: NodeJS.Platform = process.
  * one-time code and opens `<gateway>/#code=...`. The code sits after `#`, so it never
  * reaches a server log; the page exchanges it once for a session cookie.
  */
-export async function openCommand(opts: { print?: boolean }): Promise<void> {
+export async function openCommand(opts: { print?: boolean; show?: 'phone' }): Promise<void> {
   const { baseUrl } = loadConfig();
   const { code } = await getClient().webCode();
-  const url = `${baseUrl}/#code=${code}`;
+  // show=phone: the page opens "Phones & devices", which shows the pairing QR as an image.
+  const url = `${baseUrl}/#code=${code}${opts.show ? `&show=${opts.show}` : ''}`;
   if (!opts.print) {
     const [cmd, args] = browserCommand(url);
     const opened = await new Promise<boolean>((done) => {
@@ -30,7 +31,7 @@ export async function openCommand(opts: { print?: boolean }): Promise<void> {
       });
     });
     if (opened) {
-      console.log(`Opening the assistant in your browser: ${baseUrl}`);
+      console.log(opts.show === 'phone' ? 'Showing the QR code in your browser ("Phones & devices").' : `Opening the assistant in your browser: ${baseUrl}`);
       return;
     }
   }

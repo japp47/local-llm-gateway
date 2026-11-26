@@ -7,6 +7,9 @@ export interface AuthContext {
   keyId: string;
   /** How the caller proved who they are. Some actions need a key (e.g. making sign-in codes). */
   via?: 'key' | 'session';
+  /** For a browser session: which one, and whether it was signed in on this computer or a paired device. */
+  sessionId?: string;
+  sessionFrom?: 'local' | 'network';
 }
 
 export class AuthService {

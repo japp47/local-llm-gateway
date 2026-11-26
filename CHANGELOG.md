@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0 (2026-11-25)
+
+- **Use it from your phone, no app.** `llm phone` (or **Phones & devices** in the page on
+  the computer) shows a QR code; the phone scans it and opens the same chat, signed in. Two
+  ways to connect: the same Wi-Fi (`llm start --phone`; not encrypted, home only) or
+  Tailscale (`tailscale serve --bg 3000`; encrypted, anywhere).
+- **See and remove devices.** `llm devices` and the page list every signed-in browser and
+  phone; removing one signs it out at once. Only the computer running the assistant can
+  pair phones or remove other devices: a phone can never add more phones.
+- An `llm open` link now works only on the computer itself, so a leaked link is useless.
+- From the network, single-user mode serves only the page, sign-in and the API;
+  `/metrics`, `/readyz` and `/openapi.json` stay on the computer.
+- Phone-friendly page: the conversation list becomes a drawer, room for the home bar.
+- `llm phone` draws a QR code phones can read in macOS Terminal (no font characters when
+  the window is big enough); `llm phone --browser` shows it on the web page instead.
+- Fixed: chats didn't show in Chrome (Android phones). Fixed: the page was cached for a
+  year, so browsers could keep an old version after an update.
+
 ## 0.2.0 (2026-11-24)
 
 - **Web chat.** `llm open` opens the assistant in your browser at `http://localhost:3000`,

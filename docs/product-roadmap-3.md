@@ -317,8 +317,9 @@ None of these depend on the wedge decision, so they don't wait for it:
    Every wedge needs it: no everyday user or office worker will use a terminal.
 3. **Phone access v1** (moved up from Phase 5): a "Use from my phone" switch, off by default;
    pairing by QR code with one revocable key per device; Tailscale for HTTPS and away from
-   home. Version 2 later: install to the home screen, "Share to my AI". Research HTTPS on a
-   home network first (see `docs/research/2026-11-20-pivot-research.md` section 2).
+   home. Version 2 later: install to the home screen, "Share to my AI". Spec (2026-11-24,
+   both paths: home Wi-Fi over HTTP and Tailscale over HTTPS; QR in the terminal and the
+   page; a revocable session per phone): `docs/specs/phone-access.md`.
 4. Then the wedge-specific work: for B (offices, best supported by surveys:
    `docs/research/2026-11-20-survey-evidence.md`), document search with sources and an audit
    log; for A/D, the Mac installer below.

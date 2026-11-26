@@ -41,6 +41,7 @@ import { backupRoutes } from './routes/backup.js';
 import { webCodeRoutes, webSessionRoutes } from './routes/web-session.js';
 import { webPageRoutes } from './routes/web-page.js';
 import { findWebRoot } from './lib/web-root.js';
+import { isLocalRequest, WebHosts } from './lib/network.js';
 import { WebSessionService } from './services/web-session.service.js';
 
 export interface Deps {
@@ -53,6 +54,8 @@ export interface Deps {
   ollama: OllamaInfo;
   auth: AuthService;
   webSessions: WebSessionService;
+  /** Host names the page may be reached by (localhost, LAN addresses, .local, Tailscale). */
+  webHosts: WebHosts;
   conversations: ConversationService;
   models: ModelsService;
   repos: {
@@ -72,6 +75,9 @@ export interface BuildOptions {
   ollama?: OllamaInfo;
   /** Where the built web page is; null = no page. Default: dist/web, found from this file. */
   webRoot?: string | null;
+  /** Look up this machine's LAN addresses and Tailscale name (server.ts). Tests give a fixed list. */
+  detectNetwork?: boolean;
+  networkHosts?: string[];
   totalMemoryBytes?: number;
 }
 
@@ -93,6 +99,19 @@ export async function buildApp(opts: BuildOptions = {}) {
   app.addHook('onRoute', (r) => {
     for (const method of [r.method].flat()) if (method !== 'HEAD') routes.push({ method, url: r.url });
   });
+
+  // Single-user mode, request from the network (a paired phone, or through Tailscale): only
+  // what the phone needs. Metrics, readiness and the API description stay on this computer.
+  if (config.mode === 'single') {
+    app.addHook('onRequest', async (req, reply) => {
+      if (isLocalRequest(req)) return;
+      const path = req.url.split('?')[0]!;
+      const allowed = path === '/' || path.startsWith('/assets/') || path === '/web/session' || path.startsWith('/v1/') || path === '/healthz';
+      if (!allowed) {
+        return reply.code(404).send({ error: { code: 'not_found', message: `There is no ${req.method} ${path}.`, request_id: req.id } });
+      }
+    });
+  }
 
   // Unknown URLs get the same error shape as everything else.
   app.setNotFoundHandler((req, reply) =>
@@ -148,6 +167,7 @@ export async function buildApp(opts: BuildOptions = {}) {
   const ollama = opts.ollama ?? new OllamaModels(config.OLLAMA_URL);
   const auth = new AuthService(repos.apiKeys);
   const webSessions = new WebSessionService(storage.webSessions);
+  const webHosts = new WebHosts({ extra: config.webHosts, detect: opts.detectNetwork ?? false, port: config.PORT, fixed: opts.networkHosts });
   const models = new ModelsService({
     ...config.models,
     source: ollama,
@@ -169,7 +189,7 @@ export async function buildApp(opts: BuildOptions = {}) {
     messages: repos.messages,
     generations: repos.generations,
   });
-  const deps: Deps = { config, storage, limiter, metrics, provider, ollama, auth, webSessions, conversations, models, repos };
+  const deps: Deps = { config, storage, limiter, metrics, provider, ollama, auth, webSessions, webHosts, conversations, models, repos };
 
   let redis: Redis | null = null;
   if (config.REDIS_URL) {
@@ -224,7 +244,7 @@ export async function buildApp(opts: BuildOptions = {}) {
 
   await app.register(
     async (v1) => {
-      v1.addHook('onRequest', makeAuthHook(auth, webSessions, config.webHosts)); // auth first, so rate limiting can key on the key id
+      v1.addHook('onRequest', makeAuthHook(auth, webSessions, webHosts)); // auth first, so rate limiting can key on the key id
       await v1.register(rateLimit, {
         max: config.RATE_LIMIT_MAX,
         timeWindow: config.RATE_LIMIT_WINDOW,

@@ -124,6 +124,7 @@ describe('API contract', () => {
     expect(csp).toContain("frame-ancestors 'none'");
     expect(csp).not.toContain('unsafe-inline');
     expect(page.headers['x-content-type-options']).toBe('nosniff');
+    expect(page.headers['cache-control']).toBe('no-cache'); // a new version reaches phones at once
     const asset = await t.app.inject({ method: 'GET', url: '/assets/app.js' });
     expect(asset.statusCode).toBe(200);
     expect(asset.headers['cache-control']).toContain('immutable');
@@ -200,6 +201,15 @@ describe('API contract', () => {
     await call('POST', '/web/session', { code }, page); // 401 invalid_code (used)
     await call('POST', '/web/session', { code: 'x'.repeat(20) }, { host: 'evil.example', origin: 'http://evil.example' }); // 403
     await call('GET', '/v1/me', undefined, browser);
+    await call('GET', '/v1/web/phone');
+    const devices = (await call('GET', '/v1/web/sessions', undefined, browser)).json().data;
+    const phone = { remoteAddress: '192.168.1.20', headers: { host: '192.168.1.20:3000', origin: 'http://192.168.1.20:3000' } };
+    const pairCode = (await call('POST', '/v1/web/codes', { purpose: 'pair' })).json().code;
+    const paired = await t.app.inject({ method: 'POST', url: '/web/session', ...phone, payload: { code: pairCode } });
+    conforms('POST', '/web/session', paired);
+    const phoneId = (await call('GET', '/v1/web/sessions')).json().data.find((d: { id: string }) => !devices.some((x: { id: string }) => x.id === d.id)).id;
+    await call('DELETE', `/v1/web/sessions/${phoneId}`); // 204
+    await call('DELETE', `/v1/web/sessions/${phoneId}`); // 404
     await call('DELETE', '/web/session', undefined, browser);
     await call('GET', '/v1/me', undefined, browser); // 401 session_expired
   });

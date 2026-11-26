@@ -28,6 +28,8 @@ const Env = z.object({
   LEASE_SECONDS: z.coerce.number().int().positive().default(180),
   // Extra host names the web page may be reached by (comma-separated), beyond localhost.
   WEB_HOSTS: optionalString,
+  // 'wifi': single-user mode also listens on the local network, for paired phones (llm start --phone).
+  PHONE_ACCESS: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['off', 'wifi']).default('off')),
 });
 
 const list = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
@@ -67,3 +69,8 @@ export function createConfig(env: Env = process.env) {
 }
 
 export type config = ReturnType<typeof createConfig>;
+
+/** Where the gateway listens: also on the network when single-user mode has phone access on. */
+export function listenHost(c: Pick<config, 'mode' | 'PHONE_ACCESS' | 'HOST'>): string {
+  return c.mode === 'single' && c.PHONE_ACCESS === 'wifi' && ['127.0.0.1', 'localhost'].includes(c.HOST) ? '0.0.0.0' : c.HOST;
+}

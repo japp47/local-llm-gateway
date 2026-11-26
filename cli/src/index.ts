@@ -7,6 +7,7 @@ import { backupCommand, restoreCommand } from './commands/backup.js';
 import { doctorCommand } from './commands/doctor.js';
 import { startCommand } from './commands/start.js';
 import { openCommand } from './commands/open.js';
+import { devicesCommand, phoneCommand, revokeDeviceCommand } from './commands/phone.js';
 import { CliError } from './errors.js';
 import { describeErrorFully } from './key-diagnosis.js';
 import { errc } from './format.js';
@@ -106,8 +107,22 @@ program
   .action(wrap(openCommand));
 
 program
+  .command('phone')
+  .description('connect a phone: shows a QR code to scan (works once, for 5 minutes)')
+  .option('--print', 'print the link instead of a QR code')
+  .option('--browser', 'show the QR code in your browser instead (if the terminal one will not scan)')
+  .action(wrap(phoneCommand));
+
+const devices = program
+  .command('devices')
+  .description('signed-in browsers and phones; remove one with: llm devices revoke <id>')
+  .action(wrap(devicesCommand));
+devices.command('revoke').argument('<id>', 'device id or its first characters').description('sign a device out').action(wrap(revokeDeviceCommand));
+
+program
   .command('start')
   .description('start the assistant in this window (Ctrl+C stops it)')
+  .option('--phone', 'also let phones on this Wi-Fi connect (pair them with llm phone)')
   .option('--env-file <path>', 'read settings from this file (for example server mode: DATABASE_URL, REDIS_URL)')
   .action(wrap(startCommand));
 

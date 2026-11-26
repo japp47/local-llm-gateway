@@ -64,6 +64,9 @@ export const StatsQuery = z.object({
   hours: z.coerce.number().int().min(1).max(720).default(24),
   recent: z.coerce.number().int().min(0).max(50).default(5),
 });
+export const WebCodeBody = z.object({
+  purpose: z.enum(['open', 'pair']).default('open').describe("'open': this computer's browser (llm open); 'pair': a phone (llm phone)"),
+});
 export const RedeemCodeBody = z.object({ code: z.string().min(16).max(200).describe('The one-time code from the sign-in link') });
 export const LegacyChatBody = z.object({
   model: z.string(),
@@ -197,6 +200,36 @@ export const WebCode = named(
   z.strictObject({ code: z.string(), expiresAt: timestamp }),
   'WebCode',
   'A one-time sign-in code for the web page; works once, for 60 seconds',
+);
+
+export const Device = named(
+  z.strictObject({
+    id: z.uuid(),
+    deviceName: z.string().nullable().describe('From the browser, e.g. "iPhone"'),
+    createdFrom: z.enum(['local', 'network']).describe("'local': signed in on the computer running the assistant; 'network': a paired device"),
+    createdAt: timestamp,
+    lastSeenAt: timestamp,
+    current: z.boolean().describe('The device making this request'),
+  }),
+  'Device',
+  'A browser signed in to this account: the laptop, or a paired phone',
+);
+export const DeviceList = named(z.strictObject({ data: z.array(Device) }), 'DeviceList');
+export const PhoneInfo = named(
+  z.strictObject({
+    canPair: z.boolean().describe('Whether this caller may create pairing codes (an API key, or the computer itself)'),
+    wifi: z.strictObject({
+      listening: z.boolean().describe('Started with phone access (llm start --phone)'),
+      urls: z.array(z.string()).describe('Addresses a phone on the same Wi-Fi can open'),
+    }),
+    tailscale: z.strictObject({
+      name: z.string().nullable(),
+      url: z.string().nullable(),
+      serving: z.boolean().describe('tailscale serve forwards to this gateway'),
+    }),
+  }),
+  'PhoneInfo',
+  'How a phone can reach this assistant',
 );
 
 export const Health = named(z.strictObject({ ok: z.literal(true), mode: z.enum(['single', 'server']) }), 'Health');

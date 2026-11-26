@@ -17,6 +17,8 @@ import type {
   Transcript,
   TranscriptPage,
   BackupSummary,
+  Device,
+  PhoneInfo,
   CurrentUser,
 } from './types.js';
 
@@ -129,8 +131,21 @@ export class ApiClient {
   }
 
   /** A one-time code that signs the web page in (60 seconds, works once). API key only. */
-  webCode() {
-    return this.json<{ code: string; expiresAt: string }>('POST', '/v1/web/codes');
+  webCode(purpose: 'open' | 'pair' = 'open') {
+    return this.json<{ code: string; expiresAt: string }>('POST', '/v1/web/codes', { purpose });
+  }
+
+  /** How a phone can reach this gateway (Wi-Fi addresses, Tailscale), and whether we may pair. */
+  phoneInfo() {
+    return this.json<PhoneInfo>('GET', '/v1/web/phone');
+  }
+
+  devices() {
+    return this.json<{ data: Device[] }>('GET', '/v1/web/sessions');
+  }
+
+  revokeDevice(id: string) {
+    return this.json<void>('DELETE', `/v1/web/sessions/${encodeURIComponent(id)}`);
   }
 
   /** Asks the gateway to write a checked backup into its data folder. Single-user mode. */

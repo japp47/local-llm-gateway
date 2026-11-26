@@ -486,16 +486,32 @@
     "/v1/web/codes": {
       "post": {
         "operationId": "postV1WebCodes",
-        "summary": "Make a one-time sign-in code for the web page (used by `llm open`)",
-        "description": "API key only: a signed-in browser cannot make codes. The code works once, for 60 seconds.",
+        "summary": "Make a one-time sign-in code (llm open) or a phone pairing code (llm phone)",
+        "description": "'open' (default): API key only; works once, for 60 seconds, and only on this computer. 'pair': an API key or a browser on this computer; works once, for 5 minutes, from a phone. A paired phone can't make codes.",
         "tags": [
           "web"
         ],
-        "security": [
-          {
-            "apiKey": []
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "purpose": {
+                    "default": "open",
+                    "description": "'open': this computer's browser (llm open); 'pair': a phone (llm phone)",
+                    "type": "string",
+                    "enum": [
+                      "open",
+                      "pair"
+                    ]
+                  }
+                }
+              }
+            }
           }
-        ],
+        },
         "responses": {
           "201": {
             "description": "A code",
@@ -503,6 +519,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WebCode"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request (`invalid_request`, with `details`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -518,7 +544,166 @@
             }
           },
           "403": {
-            "description": "Called with a session cookie instead of an API key (`key_required`)",
+            "description": "Not allowed from this caller (`key_required`, `pair_from_computer`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests for this key (`rate_limited`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/web/sessions": {
+      "get": {
+        "operationId": "getV1WebSessions",
+        "summary": "Signed-in devices: this computer's browser and paired phones",
+        "tags": [
+          "web"
+        ],
+        "responses": {
+          "200": {
+            "description": "Devices, most recently used first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests for this key (`rate_limited`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/web/sessions/{id}": {
+      "delete": {
+        "operationId": "deleteV1WebSessionsId",
+        "summary": "Remove a device: it is signed out on its next request",
+        "description": "From this computer (API key or its browser) any device; a phone only itself.",
+        "tags": [
+          "web"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed"
+          },
+          "400": {
+            "description": "Invalid request (`invalid_request`, with `details`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A phone removing another device (`manage_from_computer`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such signed-in device (`device_not_found`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests for this key (`rate_limited`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/web/phone": {
+      "get": {
+        "operationId": "getV1WebPhone",
+        "summary": "How a phone can reach this assistant (for the pairing QR code)",
+        "tags": [
+          "web"
+        ],
+        "responses": {
+          "200": {
+            "description": "Addresses and whether this caller may pair",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, unknown or revoked API key (`invalid_api_key`), or an ended web session (`session_expired`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -595,7 +780,7 @@
             }
           },
           "403": {
-            "description": "Wrong host or origin (`forbidden_host`, `bad_origin`)",
+            "description": "Wrong host or origin (`forbidden_host`, `bad_origin`), or an llm open link used from another device (`open_link_local_only`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2227,6 +2412,134 @@
         "required": [
           "code",
           "expiresAt"
+        ],
+        "additionalProperties": false
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+          },
+          "deviceName": {
+            "description": "From the browser, e.g. \"iPhone\"",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "createdFrom": {
+            "type": "string",
+            "enum": [
+              "local",
+              "network"
+            ],
+            "description": "'local': signed in on the computer running the assistant; 'network': a paired device"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "ISO 8601 time, UTC"
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "description": "ISO 8601 time, UTC"
+          },
+          "current": {
+            "type": "boolean",
+            "description": "The device making this request"
+          }
+        },
+        "required": [
+          "id",
+          "deviceName",
+          "createdFrom",
+          "createdAt",
+          "lastSeenAt",
+          "current"
+        ],
+        "additionalProperties": false
+      },
+      "DeviceList": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
+            }
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "PhoneInfo": {
+        "type": "object",
+        "properties": {
+          "canPair": {
+            "type": "boolean",
+            "description": "Whether this caller may create pairing codes (an API key, or the computer itself)"
+          },
+          "wifi": {
+            "type": "object",
+            "properties": {
+              "listening": {
+                "type": "boolean",
+                "description": "Started with phone access (llm start --phone)"
+              },
+              "urls": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Addresses a phone on the same Wi-Fi can open"
+              }
+            },
+            "required": [
+              "listening",
+              "urls"
+            ],
+            "additionalProperties": false
+          },
+          "tailscale": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "url": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "serving": {
+                "type": "boolean",
+                "description": "tailscale serve forwards to this gateway"
+              }
+            },
+            "required": [
+              "name",
+              "url",
+              "serving"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "canPair",
+          "wifi",
+          "tailscale"
         ],
         "additionalProperties": false
       },

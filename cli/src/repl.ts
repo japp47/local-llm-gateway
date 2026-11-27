@@ -41,7 +41,7 @@ export function printSummary(res: StreamResult, quiet: boolean): boolean {
   return ok;
 }
 
-const LLM_SUBCOMMANDS = 'open|profile|config|start|doctor|backup|restore|chat|resume|ls|conversations|show|fork|rename|rm|models|stats|whoami';
+const LLM_SUBCOMMANDS = 'open|phone|devices|profile|config|start|doctor|backup|restore|chat|resume|ls|conversations|show|fork|rename|rm|models|stats|whoami';
 /** `llm profile use local` typed into the chat: a command for the terminal, not a question. */
 export const looksLikeLlmCommand = (line: string) => new RegExp(`^llm\\s+(${LLM_SUBCOMMANDS})\\b`).test(line);
 

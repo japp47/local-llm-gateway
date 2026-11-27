@@ -1,6 +1,7 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { AuthContext, AuthService } from '../services/auth.service.js';
 import type { WebSessionService } from '../services/web-session.service.js';
+import { requestHost, type WebHosts } from '../lib/network.js';
 import { allowedHost, SAFE_METHODS, sameOrigin, SESSION_COOKIE } from './web-guard.js';
 
 declare module 'fastify' {
@@ -17,7 +18,7 @@ const deny = (req: FastifyRequest, reply: FastifyReply, status: number, code: st
  * page, a session cookie. A key always wins. Cookie requests must also pass the host and
  * origin checks (see web-guard.ts).
  */
-export function makeAuthHook(auth: AuthService, web: WebSessionService, webHosts: readonly string[]) {
+export function makeAuthHook(auth: AuthService, web: WebSessionService, hosts: WebHosts) {
   return async function requireAuth(req: FastifyRequest, reply: FastifyReply) {
     const header = req.headers.authorization;
     const key = header?.startsWith('Bearer ') ? header.slice(7).trim() : undefined;
@@ -30,15 +31,22 @@ export function makeAuthHook(auth: AuthService, web: WebSessionService, webHosts
 
     const token = req.cookies?.[SESSION_COOKIE];
     if (token) {
-      if (!allowedHost(req.headers.host, webHosts)) {
+      const host = requestHost(req); // behind `tailscale serve`, the host the phone used
+      if (!allowedHost(host, hosts.list())) {
         return deny(req, reply, 403, 'forbidden_host', 'This address is not allowed to use a signed-in session.');
       }
-      if (!SAFE_METHODS.has(req.method) && !sameOrigin(req.headers.origin, req.headers.host)) {
+      if (!SAFE_METHODS.has(req.method) && !sameOrigin(req.headers.origin, host)) {
         return deny(req, reply, 403, 'bad_origin', 'This request did not come from the assistant\'s own page.');
       }
       const session = await web.authenticate(token);
       if (session) {
-        req.auth = { userId: session.userId, keyId: `session:${session.sessionId}`, via: 'session' };
+        req.auth = {
+          userId: session.userId,
+          keyId: `session:${session.sessionId}`,
+          via: 'session',
+          sessionId: session.sessionId,
+          sessionFrom: session.createdFrom,
+        };
         return;
       }
       return deny(req, reply, 401, 'session_expired', 'Your sign-in has ended.', 'Sign in again: run llm open');

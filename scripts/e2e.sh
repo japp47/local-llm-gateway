@@ -327,6 +327,33 @@ out=$(llm whoami); echo "    $out"
 check "CLI refuses the key and explains chmod 600" has "$out" "chmod 600"
 chmod 600 "$DATA/local-credentials.json"
 
+bold "[$MODE] Phone access over Wi-Fi (through this Mac's own network address)"
+LAN_IP=$(node -e "const os=require('os');const a=Object.values(os.networkInterfaces()).flat().find(i=>i.family==='IPv4'&&!i.internal&&!i.address.startsWith('169.254.')&&!i.address.startsWith('100.'));console.log(a?a.address:'')")
+if [ -z "$LAN_IP" ]; then
+  echo "    (no network address on this machine: phone checks skipped)"
+else
+  PHONE=http://$LAN_IP:$SINGLE_PORT
+  out=$(curl -s -m 2 -o /dev/null -w '%{http_code}' "$PHONE/healthz"); check "without --phone the Wi-Fi address can't connect" test "$out" != 200
+  stop_gw; start_gw "${SINGLE_ENV[@]}" PHONE_ACCESS=wifi
+  check "log: phone access is on, with the Wi-Fi URL" grep -q "Phone access is on" "$WORK/gw-single.log"
+  api GET /v1/web/phone; check "phone info: may pair, listening, this Mac's URL" jqe ".canPair and .wifi.listening and (.wifi.urls | index(\"$PHONE\"))"
+  cmd "llm phone --print"; link=$(node cli/dist/index.js phone --print 2>&1); check "llm phone gives a pairing link to the Wi-Fi URL" has "$link" "$PHONE/#code="
+  code=${link##*code=}
+  out=$(curl -s -o /dev/null -w '%{http_code}' -H 'user-agent: Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' -c "$WORK/phone-jar" -X POST -H "origin: $PHONE" -H 'content-type: application/json' -d "{\"code\":\"$code\"}" "$PHONE/web/session")
+  check "the phone signs in with the pairing code" is "$out" 204
+  conv=$(curl -s -b "$WORK/phone-jar" -X POST -H "origin: $PHONE" -H 'content-type: application/json' -d '{}' "$PHONE/v1/conversations" | jq -r .id)
+  curl -s -N -m 180 -b "$WORK/phone-jar" -X POST -H "origin: $PHONE" -H 'content-type: application/json' \
+    -d '{"content":"Reply with exactly: phone works"}' "$PHONE/v1/conversations/$conv/messages" > "$WORK/phone-sse"
+  check "the phone streams a real answer" grep -q '"status":"complete"' "$WORK/phone-sse"
+  api GET "/v1/conversations/$conv"; check "the phone's chat is the same on the computer" jqe '.messageCount == 2'
+  out=$(curl -s -o /dev/null -w '%{http_code}' "$PHONE/metrics"); check "/metrics from the network -> 404" is "$out" 404
+  out=$(node cli/dist/index.js devices 2>&1); check "llm devices lists the iPhone as a paired device" bash -c 'grep -q "iPhone" <<<"$1" && grep -q "paired device" <<<"$1"' _ "$out"
+  id=$(curl -s -H "authorization: Bearer $KEY" "$BASE/v1/web/sessions" | jq -r '.data[] | select(.createdFrom == "network") | .id')
+  cmd "llm devices revoke ${id:0:8}"; node cli/dist/index.js devices revoke "${id:0:8}" >/dev/null 2>&1
+  out=$(curl -s -o /dev/null -w '%{http_code}' -b "$WORK/phone-jar" "$PHONE/v1/me"); check "after revoke the phone is signed out (401)" is "$out" 401
+  stop_gw; start_gw "${SINGLE_ENV[@]}"
+fi
+
 bold "[$MODE] In-memory rate limit"
 stop_gw; start_gw "${SINGLE_ENV[@]}" RATE_LIMIT_MAX=3
 ratelimit_check

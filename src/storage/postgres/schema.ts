@@ -105,6 +105,8 @@ export const webCodes = pgTable('web_codes', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id),
   codeHash: text('code_hash').notNull().unique(),
+  // 'open': `llm open` on this computer (60 s, redeemable only locally); 'pair': a phone (5 min)
+  purpose: text('purpose').notNull().default('open'),
   expiresAt: ts('expires_at').notNull(),
   usedAt: ts('used_at'),
   createdAt: ts('created_at').notNull().defaultNow(),
@@ -116,6 +118,9 @@ export const webSessions = pgTable(
     id: uuid('id').primaryKey().defaultRandom(),
     userId: uuid('user_id').notNull().references(() => users.id),
     tokenHash: text('token_hash').notNull().unique(),
+    deviceName: text('device_name'), // "iPhone", "Mac": shown in the devices list
+    // 'local': signed in on the computer running the assistant; 'network': a paired phone
+    createdFrom: text('created_from').notNull().default('local'),
     createdAt: ts('created_at').notNull().defaultNow(),
     lastSeenAt: ts('last_seen_at').notNull(),
     expiresAt: ts('expires_at').notNull(), // slides forward with use (idle timeout)

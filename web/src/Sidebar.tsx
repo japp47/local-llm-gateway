@@ -10,6 +10,7 @@ interface Props {
   onMore(): void;
   onSignOut(): void;
   onBackup(): void;
+  onDevices(): void;
 }
 
 export function Sidebar(p: Props) {
@@ -39,6 +40,9 @@ export function Sidebar(p: Props) {
           Load more
         </button>
       )}
+      <button type="button" className="ghost backup" onClick={p.onDevices} title="Connect a phone, see and remove signed-in devices">
+        Phones &amp; devices
+      </button>
       <button type="button" className="ghost backup" onClick={p.onBackup} title="Save a copy of all conversations">
         Back up
       </button>

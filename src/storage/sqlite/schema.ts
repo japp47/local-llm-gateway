@@ -108,6 +108,8 @@ export const webCodes = sqliteTable('web_codes', {
   id: id(),
   userId: text('user_id').notNull().references(() => users.id),
   codeHash: text('code_hash').notNull().unique(),
+  // 'open': `llm open` on this computer (60 s, redeemable only locally); 'pair': a phone (5 min)
+  purpose: text('purpose').notNull().default('open'),
   expiresAt: ms('expires_at').notNull(),
   usedAt: ms('used_at'),
   createdAt: createdAt(),
@@ -119,6 +121,9 @@ export const webSessions = sqliteTable(
     id: id(),
     userId: text('user_id').notNull().references(() => users.id),
     tokenHash: text('token_hash').notNull().unique(),
+    deviceName: text('device_name'), // "iPhone", "Mac": shown in the devices list
+    // 'local': signed in on the computer running the assistant; 'network': a paired phone
+    createdFrom: text('created_from').notNull().default('local'),
     createdAt: createdAt(),
     lastSeenAt: ms('last_seen_at').notNull(),
     expiresAt: ms('expires_at').notNull(), // slides forward with use (idle timeout)

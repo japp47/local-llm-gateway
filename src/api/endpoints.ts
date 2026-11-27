@@ -118,14 +118,41 @@ export const ENDPOINTS: Endpoint[] = [
 
   // ---- web sign-in ----
   {
-    method: 'post', path: '/v1/web/codes', tag: 'web', auth: true, authBy: ['apiKey'],
-    summary: 'Make a one-time sign-in code for the web page (used by `llm open`)',
-    description: 'API key only: a signed-in browser cannot make codes. The code works once, for 60 seconds.',
+    method: 'post', path: '/v1/web/codes', tag: 'web', auth: true,
+    summary: 'Make a one-time sign-in code (llm open) or a phone pairing code (llm phone)',
+    description:
+      "'open' (default): API key only; works once, for 60 seconds, and only on this computer. " +
+      "'pair': an API key or a browser on this computer; works once, for 5 minutes, from a phone. A paired phone can't make codes.",
+    body: S.WebCodeBody,
     responses: {
       201: { description: 'A code', schema: S.WebCode },
+      ...INVALID,
       ...AUTH_ERRORS,
-      403: err('Called with a session cookie instead of an API key (`key_required`)'),
+      403: err('Not allowed from this caller (`key_required`, `pair_from_computer`)'),
     },
+  },
+  {
+    method: 'get', path: '/v1/web/sessions', tag: 'web', auth: true,
+    summary: 'Signed-in devices: this computer\'s browser and paired phones',
+    responses: { 200: { description: 'Devices, most recently used first', schema: S.DeviceList }, ...AUTH_ERRORS },
+  },
+  {
+    method: 'delete', path: '/v1/web/sessions/{id}', tag: 'web', auth: true,
+    summary: 'Remove a device: it is signed out on its next request',
+    description: 'From this computer (API key or its browser) any device; a phone only itself.',
+    params: S.IdParams,
+    responses: {
+      204: { description: 'Removed' },
+      ...INVALID,
+      ...AUTH_ERRORS,
+      403: err('A phone removing another device (`manage_from_computer`)'),
+      404: err('No such signed-in device (`device_not_found`)'),
+    },
+  },
+  {
+    method: 'get', path: '/v1/web/phone', tag: 'web', auth: true,
+    summary: 'How a phone can reach this assistant (for the pairing QR code)',
+    responses: { 200: { description: 'Addresses and whether this caller may pair', schema: S.PhoneInfo }, ...AUTH_ERRORS },
   },
   {
     method: 'post', path: '/web/session', tag: 'web', auth: false,
@@ -138,7 +165,7 @@ export const ENDPOINTS: Endpoint[] = [
       204: { description: 'Signed in: the session cookie is set' },
       ...INVALID,
       401: err('The code is unknown, used or expired (`invalid_code`)'),
-      403: err('Wrong host or origin (`forbidden_host`, `bad_origin`)'),
+      403: err('Wrong host or origin (`forbidden_host`, `bad_origin`), or an llm open link used from another device (`open_link_local_only`)'),
     },
   },
   {

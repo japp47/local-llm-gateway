@@ -77,17 +77,45 @@ export interface GenerationsStore {
  * Browser sign-in. Only hashes are stored. Times come from the caller (one clock per
  * request), so expiry is decided the same way on both backends.
  */
+export type CodePurpose = 'open' | 'pair';
+export type SessionOrigin = 'local' | 'network';
+
+export interface WebSessionInfo {
+  id: string;
+  deviceName: string | null;
+  createdFrom: SessionOrigin;
+  createdAt: Date;
+  lastSeenAt: Date;
+}
+
+/**
+ * Browser sign-in. Only hashes are stored. Times come from the caller (one clock per
+ * request), so expiry is decided the same way on both backends.
+ */
 export interface WebSessionsStore {
-  createCode(userId: string, codeHash: string, expiresAt: Date): Promise<void>;
-  /** Marks the code used and returns its user, atomically: a code works once, before it expires. */
-  redeemCode(codeHash: string, now: Date): Promise<{ userId: string } | null>;
-  createSession(userId: string, tokenHash: string, now: Date, expiresAt: Date): Promise<{ id: string }>;
+  createCode(userId: string, codeHash: string, expiresAt: Date, purpose: CodePurpose): Promise<void>;
+  /** Marks the code used and returns its user and purpose, atomically: a code works once, before it expires. */
+  redeemCode(codeHash: string, now: Date): Promise<{ userId: string; purpose: CodePurpose } | null>;
+  createSession(
+    userId: string,
+    tokenHash: string,
+    now: Date,
+    expiresAt: Date,
+    device: { name: string | null; createdFrom: SessionOrigin },
+  ): Promise<{ id: string }>;
   /** A session that is not revoked and not expired at `now`. */
-  findActiveSession(tokenHash: string, now: Date): Promise<{ id: string; userId: string; lastSeenAt: Date } | null>;
+  findActiveSession(
+    tokenHash: string,
+    now: Date,
+  ): Promise<{ id: string; userId: string; lastSeenAt: Date; createdFrom: SessionOrigin } | null>;
   /** Records use and moves the idle expiry forward. */
   touchSession(id: string, now: Date, expiresAt: Date): Promise<void>;
   /** True if the session was active and is now revoked. */
   revokeSession(tokenHash: string, now: Date): Promise<boolean>;
+  /** The user's active sessions (their signed-in devices), most recently used first. */
+  listSessions(userId: string, now: Date): Promise<WebSessionInfo[]>;
+  /** Revokes one of the user's sessions by id; false if not theirs, not found or already ended. */
+  revokeSessionById(userId: string, id: string, now: Date): Promise<boolean>;
   /** Removes codes and sessions that ended before `before` (housekeeping). */
   deleteExpired(before: Date): Promise<void>;
 }

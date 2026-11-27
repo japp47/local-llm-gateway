@@ -16,6 +16,8 @@ interface Props {
   model: string | null;
   onModelChange(model: string): void;
   onBranch(messageId: string): void;
+  /** Opens the conversation list (a drawer on phones). */
+  onMenu(): void;
   streaming: Streaming | null;
   /** Resolves false if nothing was sent (the text stays in the box). */
   onSend(content: string): Promise<boolean>;
@@ -39,15 +41,21 @@ function Bubble({ role, text, note, onBranch }: { role: Message['role']; text: s
   );
 }
 
-export function ChatView({ detail, defaultModel, models, model, onModelChange, onBranch, streaming, onSend, onStop, onRename, onDelete }: Props) {
+export function ChatView({ detail, defaultModel, models, model, onModelChange, onBranch, onMenu, streaming, onSend, onStop, onRename, onDelete }: Props) {
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(detail?.title ?? '');
   const end = useRef<HTMLDivElement>(null);
   const busy = streaming !== null;
 
-  useEffect(() => setTitle(detail?.title ?? ''), [detail?.title]);
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [detail?.messages.length, streaming?.answer]);
+  useEffect(() => {
+    setTitle(detail?.title ?? '');
+  }, [detail?.title]);
+  // Braces matter: an effect must return nothing or a cleanup function. Chrome's scrollIntoView
+  // returns a Promise, which React would later call as the cleanup and crash the page.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [detail?.messages.length, streaming?.answer]);
 
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
@@ -69,6 +77,7 @@ export function ChatView({ detail, defaultModel, models, model, onModelChange, o
   return (
     <section className="chat">
       <header className="chat-header">
+        <button type="button" className="ghost menu" onClick={onMenu} aria-label="Conversations">☰</button>
         {detail && editing ? (
           <form
             className="rename"

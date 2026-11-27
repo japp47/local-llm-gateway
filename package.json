@@ -1,6 +1,6 @@
 {
   "name": "local-llm-gateway",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "A private AI assistant on your own computer: a gateway in front of Ollama, with the `llm` terminal app.",
   "keywords": [
     "ollama",
@@ -66,11 +66,13 @@
     "fastify": "^5.12.5",
     "ioredis": "^6.0.0",
     "postgres": "^3.4.9",
+    "qrcode": "^1.5.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.4",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",

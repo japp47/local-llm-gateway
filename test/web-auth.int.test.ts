@@ -63,7 +63,7 @@ describe('web sign-in', () => {
     expect((await signIn(code)).statusCode).toBe(204);
     const again = await signIn(code);
     expect(again.statusCode).toBe(401);
-    expect(again.json().error).toMatchObject({ code: 'invalid_code', hint: 'Run llm open again for a new one.' });
+    expect(again.json().error).toMatchObject({ code: 'invalid_code', hint: 'Run llm open again for a new one (llm phone for a phone).' });
   });
 
   it('sign out ends the session and clears the cookie', async () => {
@@ -124,11 +124,12 @@ describe('web sign-in', () => {
     expect(res.statusCode).toBe(201);
   });
 
-  it('WEB_HOSTS allows an extra host name for the page', async () => {
+  it('WEB_HOSTS allows an extra host name for the page (a device reaching it by that name pairs)', async () => {
     const t2 = await makeTestApp(new FakeProvider(), { WEB_HOSTS: 'office-box.lan' });
     try {
       const k = (await t2.addUser('web2@example.com')).headers;
-      const code = (await t2.app.inject({ method: 'POST', url: '/v1/web/codes', headers: k })).json().code;
+      // Another host name is another device: it pairs (an llm open link works only on this computer).
+      const code = (await t2.app.inject({ method: 'POST', url: '/v1/web/codes', headers: k, payload: { purpose: 'pair' } })).json().code;
       const res = await t2.app.inject({
         method: 'POST', url: '/web/session', headers: { host: 'office-box.lan:3000', origin: 'http://office-box.lan:3000' }, payload: { code },
       });

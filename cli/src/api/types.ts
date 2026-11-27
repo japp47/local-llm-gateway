@@ -167,3 +167,18 @@ export interface BackupSummary {
   bytes: number;
   createdAt: string;
 }
+
+export interface Device {
+  id: string;
+  deviceName: string | null;
+  createdFrom: 'local' | 'network';
+  createdAt: string;
+  lastSeenAt: string;
+  current: boolean;
+}
+
+export interface PhoneInfo {
+  canPair: boolean;
+  wifi: { listening: boolean; urls: string[] };
+  tailscale: { name: string | null; url: string | null; serving: boolean };
+}

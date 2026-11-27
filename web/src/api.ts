@@ -3,6 +3,8 @@
 import { SseParser } from './sse';
 import type {
   BackupSummary,
+  DeviceList,
+  PhoneInfo,
   Conversation,
   ConversationPage,
   ConversationWithMessages,
@@ -83,6 +85,10 @@ export const api = {
   fork: (id: string, fromMessageId: string) =>
     json<ForkedConversation>('POST', `/v1/conversations/${id}/forks`, { fromMessageId }),
   backup: () => json<BackupSummary>('POST', '/v1/backup'),
+  phoneInfo: () => json<PhoneInfo>('GET', '/v1/web/phone'),
+  pairCode: () => json<{ code: string; expiresAt: string }>('POST', '/v1/web/codes', { purpose: 'pair' }),
+  devices: () => json<DeviceList>('GET', '/v1/web/sessions'),
+  removeDevice: (id: string) => json<void>('DELETE', `/v1/web/sessions/${id}`),
 
   /**
    * Sends a message and streams the answer. Problems before the answer starts (Ollama not

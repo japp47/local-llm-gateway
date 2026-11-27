@@ -9,7 +9,7 @@ import { gatewayEntry } from '../gateway-files.js';
  * Without --env-file it reads only real environment variables, so a stray .env in the
  * current folder never switches the mode by surprise.
  */
-export async function startCommand(opts: { envFile?: string }): Promise<void> {
+export async function startCommand(opts: { envFile?: string; phone?: boolean }): Promise<void> {
   const entry = gatewayEntry();
   if (!entry) {
     throw new CliError(
@@ -24,7 +24,9 @@ export async function startCommand(opts: { envFile?: string }): Promise<void> {
     args.push(`--env-file=${file}`);
   }
 
-  const child = spawn(process.execPath, [...args, entry], { stdio: 'inherit' });
+  // --phone: also listen on the local network so paired phones on this Wi-Fi can connect.
+  const env = opts.phone ? { ...process.env, PHONE_ACCESS: 'wifi' } : process.env;
+  const child = spawn(process.execPath, [...args, entry], { stdio: 'inherit', env });
   // Pass stop signals on and wait, so the gateway always shuts down cleanly (releases its
   // lock, closes the database). Ctrl+C in a terminal reaches both processes anyway; a
   // signal sent to `llm` alone (a process manager, `kill`) must still reach the gateway.

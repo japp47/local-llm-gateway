@@ -43,6 +43,7 @@ export const webPageRoutes: FastifyPluginAsync<{ root: string | null }> = async 
       throw new AppError(404, 'page_not_built', "The web page isn't built.", { hint: 'Run: npm run build (or use llm chat)' });
     }
     securityHeaders(reply).header('cache-control', 'no-cache'); // always pick up a new version
-    return reply.sendFile('index.html', root);
+    // cacheControl: false, or sendFile would replace no-cache with the assets' one-year rule.
+    return reply.sendFile('index.html', root, { cacheControl: false });
   });
 };

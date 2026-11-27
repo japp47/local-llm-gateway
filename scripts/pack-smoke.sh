@@ -78,6 +78,11 @@ curl -sf -c "$WORK/jar" -o /dev/null -X POST -H "origin: $LLM_BASE_URL" -H 'cont
   -d "{\"code\":\"$code\"}" "$LLM_BASE_URL/web/session" || fail "the sign-in link signs the browser in"
 curl -sf -b "$WORK/jar" "$LLM_BASE_URL/v1/me" | grep -q "local@localhost" || fail "the session cookie works"
 ok "llm open: the one-time link signs the browser in"
+"$LLM" devices | grep -q "this computer" || fail "llm devices lists the signed-in browser"
+ok "llm devices lists the signed-in browser"
+out=$("$LLM" phone 2>&1 || true) # exits 1 on purpose: nothing set up yet
+grep -q "llm start --phone" <<<"$out" || fail "llm phone explains how to let phones connect"
+ok "llm phone explains how to let phones connect (phone access is off)"
 
 step "Backup, stop, restore"
 BACKUP=$("$LLM" backup --json | sed -n 's/.*"file": "\(.*\)".*/\1/p')
